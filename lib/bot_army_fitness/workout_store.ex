@@ -86,10 +86,17 @@ defmodule BotArmyFitness.WorkoutStore do
   def init(_opts) do
     Logger.info("WorkoutStore started")
     # Load all workouts from database into GenServer state
-    workouts = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Workout)
-    state = Enum.reduce(workouts, %{}, fn workout, acc ->
-      Map.put(acc, workout.id |> to_string(), schema_to_map(workout))
-    end)
+    # Gracefully handle database unavailability (e.g., in tests)
+    state = try do
+      workouts = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Workout)
+      Enum.reduce(workouts, %{}, fn workout, acc ->
+        Map.put(acc, workout.id |> to_string(), schema_to_map(workout))
+      end)
+    rescue
+      _ ->
+        Logger.warning("Could not load workouts from database (database unavailable). Starting with empty state.")
+        %{}
+    end
     {:ok, state}
   end
 
