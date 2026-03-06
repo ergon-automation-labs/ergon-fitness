@@ -113,3 +113,46 @@ Deployment happens after:
 - `bot_army_schemas_fitness` - Fitness message schemas
 - `bot_army_core` - Core library and NATS decoder
 - `bot_army_infra` - Deployment infrastructure
+
+---
+
+## Agent Workflow Pattern
+
+**Effective use of Claude Code agents when developing this bot.**
+
+This follows the polyrepo agent strategy documented in `bot_army_infra/CLAUDE.md`.
+
+### When to Use Haiku Agents
+
+- Exploring handler implementations and understanding existing patterns
+- Reading test files to understand expected behavior
+- Diagnostics: checking test failures, understanding error logs
+- Code search: finding specific handlers or NATS subjects
+- Verification: running tests, checking message flow
+
+**Why**: Fast iteration loop, perfect for understanding how other bots are structured.
+
+### When to Use Sonnet Agents
+
+- Implementing new handlers or business logic
+- Designing complex analytics and progress tracking features
+- Multi-handler integrations and workout data management
+- Refactoring handlers for new requirements
+- Performance optimizations
+
+**Why**: Deep reasoning ensures handlers are correct, analytics logic is sound, and data consistency is maintained.
+
+### Example: Add Workout Analytics Feature
+
+```
+User: "Add workout performance analytics with trends"
+  ↓
+1. Haiku (Explore): Read existing workout_handler.ex and goal_handler.ex, understand data flow
+  ↓
+2. Sonnet (Plan): Design analytics feature, identify metrics to track, plan aggregation strategy
+   Determine storage and query patterns
+  ↓
+3. Sonnet (Implement): Add analytics handler, implement trend calculations, add tests
+  ↓
+4. Haiku (Verify): Run test suite, check accuracy of calculations
+```
