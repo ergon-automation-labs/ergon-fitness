@@ -10,6 +10,8 @@ defmodule BotArmyFitness.Application do
 
   use Application
 
+  @env Mix.env()
+
   @impl true
   def start(_type, _args) do
     children = []
@@ -22,18 +24,14 @@ defmodule BotArmyFitness.Application do
   end
 
   defp maybe_add_repo(children) do
-    if Mix.env() == :test, do: children, else: [BotArmyFitness.Repo | children]
+    if @env == :test, do: children, else: [BotArmyFitness.Repo | children]
   end
 
   defp maybe_add_workout_store(children) do
-    if Application.get_env(:bot_army_fitness, :workout_store) == BotArmyFitness.WorkoutStore do
-      [{BotArmyFitness.WorkoutStore, []} | children]
-    else
-      children
-    end
+    if @env == :test, do: children, else: [{BotArmyFitness.WorkoutStore, []} | children]
   end
 
   defp maybe_add_consumer(children) do
-    if Mix.env() == :test, do: children, else: [{BotArmyFitness.NATS.Consumer, []} | children]
+    if @env == :test, do: children, else: [{BotArmyFitness.NATS.Consumer, []} | children]
   end
 end
