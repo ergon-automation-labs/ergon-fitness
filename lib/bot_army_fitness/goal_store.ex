@@ -15,6 +15,8 @@ defmodule BotArmyFitness.GoalStore do
   - `clear/0` - Clear all goals (for testing)
   """
 
+  @behaviour BotArmyFitness.GoalStoreBehaviour
+
   use GenServer
   require Logger
 
@@ -165,6 +167,8 @@ defmodule BotArmyFitness.GoalStore do
       "title" => goal.title,
       "target_date" => goal.target_date,
       "status" => goal.status,
+      "goal_type" => goal.goal_type,
+      "target_value" => goal.target_value,
       "inserted_at" => goal.inserted_at,
       "updated_at" => goal.updated_at
     }

@@ -1,5 +1,18 @@
 defmodule BotArmyFitness.Handlers.GoalHandlerTest do
   use ExUnit.Case
+  import Mox
+
+  setup :set_mox_global
+
+  setup do
+    stub(BotArmyFitness.GoalStoreMock, :create, fn _payload ->
+      {:ok, %{"id" => UUID.uuid4(), "title" => "test goal"}}
+    end)
+    stub(BotArmyFitness.GoalStoreMock, :update, fn _goal_id, _payload ->
+      {:ok, %{"id" => UUID.uuid4(), "title" => "test goal"}}
+    end)
+    :ok
+  end
 
   describe "handle_set/1" do
     test "successfully sets a fitness goal" do

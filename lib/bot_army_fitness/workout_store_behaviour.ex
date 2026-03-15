@@ -1,14 +1,12 @@
 defmodule BotArmyFitness.WorkoutStoreBehaviour do
   @moduledoc """
-  Behaviour definition for workout storage.
-
-  Allows different implementations (real database, mock) to be swapped via configuration.
+  Behaviour for WorkoutStore to enable mocking in tests.
   """
 
-  @callback create(payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback update(workout_id :: String.t(), payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback get(workout_id :: String.t()) :: {:ok, map()} | {:error, atom()}
-  @callback list() :: {:ok, list(map())}
-  @callback list_by_date(date_str :: String.t()) :: {:ok, list(map())}
-  @callback clear() :: :ok
+  @callback create(map) :: {:ok, map} | {:error, term}
+  @callback update(binary, map) :: {:ok, map} | {:error, term}
+  @callback get(binary) :: {:ok, map} | {:error, term}
+  @callback list :: {:ok, [map]}
+  @callback list_by_date(binary) :: {:ok, [map]} | {:error, term}
+  @callback clear :: :ok
 end

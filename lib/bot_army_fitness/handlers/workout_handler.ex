@@ -21,8 +21,24 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
     case validate_log_payload(payload) do
       :ok ->
-        Logger.info("Workout logged: event_id=#{event_id}")
-        publish_event("fitness.workout.logged", payload, event_id)
+        store_payload = %{
+          "title" => Map.get(payload, "title", payload["workout_type"]),
+          "exercise_type" => payload["workout_type"],
+          "duration_minutes" => payload["duration_minutes"],
+          "calories" => Map.get(payload, "calories_burned"),
+          "intensity" => Map.get(payload, "intensity", "moderate"),
+          "date" => Map.get(payload, "date")
+        }
+
+        case workout_store().create(store_payload) do
+          {:ok, workout} ->
+            Logger.info("Workout logged: event_id=#{event_id}, workout_id=#{workout["id"]}")
+            publish_event("fitness.workout.logged", Map.put(payload, "workout_id", workout["id"]), event_id)
+
+          {:error, reason} ->
+            Logger.warning("Failed to persist workout: #{inspect(reason)}")
+            publish_error(event_id, reason, "Failed to persist workout")
+        end
 
       {:error, reason} ->
         Logger.warning("Invalid workout payload: #{inspect(reason)}")
@@ -95,5 +111,9 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
   defp get_node_name do
     node() |> Atom.to_string()
+  end
+
+  defp workout_store do
+    Application.get_env(:bot_army_fitness, :workout_store, BotArmyFitness.WorkoutStore)
   end
 end

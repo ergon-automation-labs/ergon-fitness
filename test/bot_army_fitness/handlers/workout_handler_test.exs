@@ -1,5 +1,15 @@
 defmodule BotArmyFitness.Handlers.WorkoutHandlerTest do
   use ExUnit.Case
+  import Mox
+
+  setup :set_mox_global
+
+  setup do
+    stub(BotArmyFitness.WorkoutStoreMock, :create, fn _payload ->
+      {:ok, %{"id" => UUID.uuid4(), "title" => "test workout"}}
+    end)
+    :ok
+  end
 
   describe "handle_log/1" do
     test "successfully logs a workout" do

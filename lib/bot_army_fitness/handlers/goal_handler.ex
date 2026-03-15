@@ -22,8 +22,15 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
 
     case validate_set_payload(payload) do
       :ok ->
-        Logger.info("Fitness goal set: event_id=#{event_id}")
-        publish_event("fitness.goal.set", payload, event_id)
+        case goal_store().create(payload) do
+          {:ok, goal} ->
+            Logger.info("Fitness goal set: event_id=#{event_id}, goal_id=#{goal["id"]}")
+            publish_event("fitness.goal.set", Map.put(payload, "goal_id", goal["id"]), event_id)
+
+          {:error, reason} ->
+            Logger.warning("Failed to persist goal: #{inspect(reason)}")
+            publish_error(event_id, reason, "Failed to persist goal")
+        end
 
       {:error, reason} ->
         Logger.warning("Invalid goal payload: #{inspect(reason)}")
@@ -42,8 +49,19 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
 
     case validate_update_payload(payload) do
       :ok ->
-        Logger.info("Fitness goal updated: event_id=#{event_id}")
-        publish_event("fitness.goal.updated", payload, event_id)
+        case goal_store().update(payload["goal_id"], payload) do
+          {:ok, _goal} ->
+            Logger.info("Fitness goal updated: event_id=#{event_id}, goal_id=#{payload["goal_id"]}")
+            publish_event("fitness.goal.updated", payload, event_id)
+
+          {:error, :not_found} ->
+            Logger.warning("Goal not found: #{payload["goal_id"]}")
+            publish_error(event_id, :not_found, "Goal not found")
+
+          {:error, reason} ->
+            Logger.warning("Failed to update goal: #{inspect(reason)}")
+            publish_error(event_id, reason, "Failed to update goal")
+        end
 
       {:error, reason} ->
         Logger.warning("Invalid goal update payload: #{inspect(reason)}")
@@ -122,5 +140,9 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
 
   defp get_node_name do
     node() |> Atom.to_string()
+  end
+
+  defp goal_store do
+    Application.get_env(:bot_army_fitness, :goal_store, BotArmyFitness.GoalStore)
   end
 end

@@ -2,6 +2,7 @@ import Config
 
 # Test configuration uses mocks instead of real database stores
 config :bot_army_fitness, :workout_store, BotArmyFitness.WorkoutStoreMock
+config :bot_army_fitness, :goal_store, BotArmyFitness.GoalStoreMock
 
 # Test against Kubernetes PostgreSQL (via NodePort)
 # Uses same configuration as production, just with test database

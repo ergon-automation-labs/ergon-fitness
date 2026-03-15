@@ -60,7 +60,11 @@ defmodule BotArmyFitness.NATS.Publisher do
   defp do_publish(subject, body) do
     case Jason.decode(body) do
       {:ok, payload} ->
-        BotArmyRuntime.NATS.Publisher.publish(subject, payload)
+        case BotArmyRuntime.NATS.Publisher.publish(subject, payload) do
+          :ok -> :ok
+          {:ok, _} -> :ok
+          {:error, reason} -> {:error, reason}
+        end
 
       {:error, reason} ->
         Logger.error("Failed to decode body for #{subject}: #{inspect(reason)}")
@@ -73,6 +77,7 @@ defmodule BotArmyFitness.NATS.Publisher do
       "fitness.workout.logged" -> "events.fitness.workout.logged"
       "fitness.goal.set" -> "events.fitness.goal.set"
       "fitness.goal.updated" -> "events.fitness.goal.updated"
+      "fitness.workout.plan.ready" -> "events.fitness.workout.plan.ready"
       "fitness.error" -> "events.fitness.error"
       _ -> "events.fitness.unknown"
     end

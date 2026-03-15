@@ -32,7 +32,9 @@ defmodule BotArmyFitness.NATS.Consumer do
     "fitness.workout.log",
     "fitness.goal.set",
     "fitness.goal.update",
-    "fitness.goal.progress"
+    "fitness.goal.progress",
+    "fitness.workout.plan.request",
+    "events.llm.response.parsed"
   ]
 
   # API
@@ -128,6 +130,8 @@ defmodule BotArmyFitness.NATS.Consumer do
       "fitness.goal.set" -> BotArmyFitness.Handlers.GoalHandler.handle_set(message)
       "fitness.goal.update" -> BotArmyFitness.Handlers.GoalHandler.handle_update(message)
       "fitness.goal.progress" -> handle_goal_progress(nats_msg, message)
+      "fitness.workout.plan.request" -> BotArmyFitness.Handlers.WorkoutPlanHandler.handle_plan_request(message)
+      "llm.response.parsed" -> BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
       _ -> Logger.debug("Unknown Fitness event type: #{event}")
     end
   end
@@ -164,19 +168,17 @@ defmodule BotArmyFitness.NATS.Consumer do
     end
   end
 
-  defp count_recent_workouts(goal_id) do
+  defp count_recent_workouts(_goal_id) do
     {:ok, workouts} = BotArmyFitness.WorkoutStore.list()
     thirty_days_ago = DateTime.add(DateTime.utc_now(), -30, :day)
 
-    workouts
-    |> Enum.filter(fn w ->
-      w["goal_id"] == goal_id &&
-      (case DateTime.from_iso8601(w["logged_at"] || "") do
-        {:ok, logged_dt, _} -> DateTime.compare(logged_dt, thirty_days_ago) != :lt
+    Enum.count(workouts, fn w ->
+      case NaiveDateTime.from_iso8601(w["created_at"] || "") do
+        {:ok, created_naive} ->
+          DateTime.compare(DateTime.from_naive!(created_naive, "Etc/UTC"), thirty_days_ago) != :lt
         _ -> false
-      end)
+      end
     end)
-    |> Enum.count()
   end
 
   defp days_until_target(date_str) when is_binary(date_str) do

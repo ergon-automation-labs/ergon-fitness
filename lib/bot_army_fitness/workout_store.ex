@@ -15,6 +15,8 @@ defmodule BotArmyFitness.WorkoutStore do
   - `list_by_date/1` - List workouts for a specific date
   """
 
+  @behaviour BotArmyFitness.WorkoutStoreBehaviour
+
   use GenServer
   require Logger
 
