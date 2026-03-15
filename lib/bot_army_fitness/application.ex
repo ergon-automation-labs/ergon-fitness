@@ -17,6 +17,8 @@ defmodule BotArmyFitness.Application do
     children = []
     |> maybe_add_repo()
     |> maybe_add_workout_store()
+    |> maybe_add_goal_store()
+    |> maybe_add_goal_scheduler()
     |> maybe_add_consumer()
 
     opts = [strategy: :one_for_one, name: BotArmyFitness.Supervisor]
@@ -29,6 +31,14 @@ defmodule BotArmyFitness.Application do
 
   defp maybe_add_workout_store(children) do
     if @env == :test, do: children, else: [{BotArmyFitness.WorkoutStore, []} | children]
+  end
+
+  defp maybe_add_goal_store(children) do
+    if @env == :test, do: children, else: [{BotArmyFitness.GoalStore, []} | children]
+  end
+
+  defp maybe_add_goal_scheduler(children) do
+    if @env == :test, do: children, else: [{BotArmyFitness.GoalScheduler, []} | children]
   end
 
   defp maybe_add_consumer(children) do

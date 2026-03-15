@@ -26,9 +26,14 @@ defmodule BotArmyFitness.NATS.Consumer do
   use GenServer
   require Logger
 
-  @nats_url System.get_env("NATS_URL", "nats://localhost:4222")
   @reconnect_delay_ms 5000
-  @max_reconnect_retries 10
+
+  @subjects [
+    "fitness.workout.log",
+    "fitness.goal.set",
+    "fitness.goal.update",
+    "fitness.goal.progress"
+  ]
 
   # API
 
@@ -44,12 +49,36 @@ defmodule BotArmyFitness.NATS.Consumer do
 
     state = %{
       subscriptions: [],
-      reconnect_attempt: 0,
+      conn: nil,
       opts: opts
     }
 
-    Logger.info("Fitness NATS consumer initialized, ready to receive messages from NATS broker")
-    {:ok, state}
+    {:ok, state, {:continue, :subscribe}}
+  end
+
+  @impl true
+  def handle_continue(:subscribe, state) do
+    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+      {:ok, conn} ->
+        Logger.info("Connected to NATS, subscribing to fitness topics")
+
+        Enum.each(@subjects, fn subject ->
+          Gnat.sub(conn, self(), subject)
+          Logger.info("Fitness consumer subscribed to #{subject}")
+        end)
+
+        {:noreply, %{state | conn: conn}}
+
+      {:error, reason} ->
+        Logger.warning("Failed to get NATS connection: #{inspect(reason)}, retrying in #{@reconnect_delay_ms}ms")
+        Process.send_after(self(), :retry_subscribe, @reconnect_delay_ms)
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_info(:retry_subscribe, state) do
+    {:noreply, state, {:continue, :subscribe}}
   end
 
   @impl true
@@ -58,7 +87,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
     case BotArmyCore.NATS.Decoder.decode(msg.body) do
       {:ok, decoded_message} ->
-        route_message(decoded_message)
+        route_message(decoded_message, msg)
 
       {:error, reason} ->
         Logger.warning("Failed to decode message from #{msg.topic}: #{inspect(reason)}")
@@ -91,14 +120,71 @@ defmodule BotArmyFitness.NATS.Consumer do
   @doc """
   Route decoded message to appropriate handler based on event type.
   """
-  def route_message(message) do
+  def route_message(message, nats_msg) do
     event = message["event"]
 
     case event do
       "fitness.workout.log" -> BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
       "fitness.goal.set" -> BotArmyFitness.Handlers.GoalHandler.handle_set(message)
       "fitness.goal.update" -> BotArmyFitness.Handlers.GoalHandler.handle_update(message)
+      "fitness.goal.progress" -> handle_goal_progress(nats_msg, message)
       _ -> Logger.debug("Unknown Fitness event type: #{event}")
     end
   end
+
+  defp handle_goal_progress(nats_msg, message) do
+    if nats_msg.reply_to do
+      payload = message["payload"] || %{}
+      goal_id = payload["goal_id"]
+
+      goal = BotArmyFitness.GoalStore.get(goal_id)
+
+      response = case goal do
+        nil ->
+          %{"error" => "Goal not found"}
+
+        goal_data ->
+          workouts_last_30 = count_recent_workouts(goal_id)
+          days_remaining = days_until_target(goal_data["target_date"])
+          %{
+            "goal" => goal_data,
+            "workouts_last_30_days" => workouts_last_30,
+            "days_remaining" => days_remaining
+          }
+      end
+
+      case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        {:ok, conn} ->
+          Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
+          Logger.debug("Published goal progress response")
+
+        {:error, reason} ->
+          Logger.warning("Failed to publish goal progress: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp count_recent_workouts(goal_id) do
+    {:ok, workouts} = BotArmyFitness.WorkoutStore.list()
+    thirty_days_ago = DateTime.add(DateTime.utc_now(), -30, :day)
+
+    workouts
+    |> Enum.filter(fn w ->
+      w["goal_id"] == goal_id &&
+      (case DateTime.from_iso8601(w["logged_at"] || "") do
+        {:ok, logged_dt, _} -> DateTime.compare(logged_dt, thirty_days_ago) != :lt
+        _ -> false
+      end)
+    end)
+    |> Enum.count()
+  end
+
+  defp days_until_target(date_str) when is_binary(date_str) do
+    case Date.from_iso8601(date_str) do
+      {:ok, target_date} -> Date.diff(target_date, Date.utc_today())
+      _ -> nil
+    end
+  end
+
+  defp days_until_target(_), do: nil
 end
