@@ -14,6 +14,8 @@ defmodule BotArmyFitness.Schemas.Goal do
     field :status, :string, default: "active"
     field :goal_type, :string
     field :target_value, :string
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
 
     timestamps()
   end
@@ -21,7 +23,7 @@ defmodule BotArmyFitness.Schemas.Goal do
   @doc false
   def changeset(goal, attrs) do
     goal
-    |> cast(attrs, [:title, :target_date, :status, :goal_type, :target_value])
+    |> cast(attrs, [:title, :target_date, :status, :goal_type, :target_value, :tenant_id, :user_id])
     |> validate_required([:title, :target_date, :goal_type])
     |> validate_inclusion(:status, ["active", "completed", "archived"])
   end

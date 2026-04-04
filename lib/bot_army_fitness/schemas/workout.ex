@@ -17,6 +17,8 @@ defmodule BotArmyFitness.Schemas.Workout do
     field :intensity, :string, default: "moderate"
     field :calories, :integer
     field :location, :string
+    field :tenant_id, Ecto.UUID
+    field :user_id, Ecto.UUID
 
     timestamps()
   end
@@ -24,7 +26,7 @@ defmodule BotArmyFitness.Schemas.Workout do
   @doc false
   def changeset(workout, attrs) do
     workout
-    |> cast(attrs, [:title, :date, :duration_minutes, :exercise_type, :intensity, :calories, :location])
+    |> cast(attrs, [:title, :date, :duration_minutes, :exercise_type, :intensity, :calories, :location, :tenant_id, :user_id])
     |> validate_required([:title, :date, :exercise_type])
     |> validate_number(:duration_minutes, greater_than: 0)
     |> validate_number(:calories, greater_than_or_equal_to: 0)
