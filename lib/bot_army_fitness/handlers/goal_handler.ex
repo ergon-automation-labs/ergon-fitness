@@ -17,24 +17,30 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
   Validates the goal data and publishes a goal.set event.
   """
   def handle_set(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
     case validate_set_payload(payload) do
       :ok ->
-        case goal_store().create(payload) do
+        store_payload = Map.merge(payload, %{
+          "tenant_id" => tenant_id,
+          "user_id" => user_id
+        })
+
+        case goal_store().create(store_payload) do
           {:ok, goal} ->
             Logger.info("Fitness goal set: event_id=#{event_id}, goal_id=#{goal["id"]}")
-            publish_event("fitness.goal.set", Map.put(payload, "goal_id", goal["id"]), event_id)
+            publish_event("fitness.goal.set", Map.put(payload, "goal_id", goal["id"]), event_id, tenant_id, user_id)
 
           {:error, reason} ->
             Logger.warning("Failed to persist goal: #{inspect(reason)}")
-            publish_error(event_id, reason, "Failed to persist goal")
+            publish_error(event_id, reason, "Failed to persist goal", tenant_id, user_id)
         end
 
       {:error, reason} ->
         Logger.warning("Invalid goal payload: #{inspect(reason)}")
-        publish_error(event_id, reason, "Invalid goal data")
+        publish_error(event_id, reason, "Invalid goal data", tenant_id, user_id)
     end
   end
 
@@ -44,28 +50,34 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
   Validates the update data and publishes a goal.updated event.
   """
   def handle_update(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
     case validate_update_payload(payload) do
       :ok ->
-        case goal_store().update(payload["goal_id"], payload) do
+        store_payload = Map.merge(payload, %{
+          "tenant_id" => tenant_id,
+          "user_id" => user_id
+        })
+
+        case goal_store().update(payload["goal_id"], store_payload) do
           {:ok, _goal} ->
             Logger.info("Fitness goal updated: event_id=#{event_id}, goal_id=#{payload["goal_id"]}")
-            publish_event("fitness.goal.updated", payload, event_id)
+            publish_event("fitness.goal.updated", payload, event_id, tenant_id, user_id)
 
           {:error, :not_found} ->
             Logger.warning("Goal not found: #{payload["goal_id"]}")
-            publish_error(event_id, :not_found, "Goal not found")
+            publish_error(event_id, :not_found, "Goal not found", tenant_id, user_id)
 
           {:error, reason} ->
             Logger.warning("Failed to update goal: #{inspect(reason)}")
-            publish_error(event_id, reason, "Failed to update goal")
+            publish_error(event_id, reason, "Failed to update goal", tenant_id, user_id)
         end
 
       {:error, reason} ->
         Logger.warning("Invalid goal update payload: #{inspect(reason)}")
-        publish_error(event_id, reason, "Invalid goal data")
+        publish_error(event_id, reason, "Invalid goal data", tenant_id, user_id)
     end
   end
 
@@ -93,7 +105,7 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
     end
   end
 
-  defp publish_event(event_type, payload, event_id) do
+  defp publish_event(event_type, payload, event_id, tenant_id, user_id) do
     event_data = %{
       "event" => event_type,
       "event_id" => UUID.uuid4(),
@@ -102,6 +114,8 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "fitness.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "goal_type" => Map.get(payload, "goal_type"),
         "target_value" => Map.get(payload, "target_value"),
@@ -116,7 +130,7 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
     end
   end
 
-  defp publish_error(event_id, reason, message) do
+  defp publish_error(event_id, reason, message, tenant_id, user_id) do
     error_event = %{
       "event" => "fitness.error",
       "event_id" => UUID.uuid4(),
@@ -125,6 +139,8 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "fitness.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "error" => message,
         "reason" => inspect(reason),

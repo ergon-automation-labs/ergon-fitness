@@ -51,26 +51,26 @@ defmodule BotArmyFitness.WorkoutStore do
 
   Returns `{:ok, workout}` or `{:error, :not_found}`.
   """
-  def get(workout_id) when is_binary(workout_id) do
-    GenServer.call(@server, {:get, workout_id})
+  def get(tenant_id, workout_id) when is_binary(tenant_id) and is_binary(workout_id) do
+    GenServer.call(@server, {:get, tenant_id, workout_id})
   end
 
   @doc """
-  List all workouts.
+  List all workouts for a tenant.
 
   Returns `{:ok, workouts}`.
   """
-  def list do
-    GenServer.call(@server, :list)
+  def list(tenant_id) when is_binary(tenant_id) do
+    GenServer.call(@server, {:list, tenant_id})
   end
 
   @doc """
-  List workouts for a specific date.
+  List workouts for a specific date and tenant.
 
   Returns `{:ok, workouts}`.
   """
-  def list_by_date(date_str) when is_binary(date_str) do
-    GenServer.call(@server, {:list_by_date, date_str})
+  def list_by_date(tenant_id, date_str) when is_binary(tenant_id) and is_binary(date_str) do
+    GenServer.call(@server, {:list_by_date, tenant_id, date_str})
   end
 
   @doc """
@@ -120,6 +120,8 @@ defmodule BotArmyFitness.WorkoutStore do
     changeset = BotArmyFitness.Schemas.Workout.changeset(
       %BotArmyFitness.Schemas.Workout{id: workout_id},
       %{
+        "tenant_id" => payload["tenant_id"],
+        "user_id" => Map.get(payload, "user_id"),
         "title" => payload["title"],
         "date" => workout_date,
         "duration_minutes" => payload["duration_minutes"],
@@ -196,26 +198,33 @@ defmodule BotArmyFitness.WorkoutStore do
   end
 
   @impl true
-  def handle_call({:get, workout_id}, _from, state) do
+  def handle_call({:get, tenant_id, workout_id}, _from, state) do
     case Map.get(state, workout_id) do
       nil -> {:reply, {:error, :not_found}, state}
-      workout -> {:reply, {:ok, workout}, state}
+      workout ->
+        if workout["tenant_id"] == tenant_id do
+          {:reply, {:ok, workout}, state}
+        else
+          {:reply, {:error, :not_found}, state}
+        end
     end
   end
 
   @impl true
-  def handle_call(:list, _from, state) do
-    workouts = Map.values(state)
+  def handle_call({:list, tenant_id}, _from, state) do
+    workouts = state
+      |> Map.values()
+      |> Enum.filter(&(&1["tenant_id"] == tenant_id))
     {:reply, {:ok, workouts}, state}
   end
 
   @impl true
-  def handle_call({:list_by_date, date_str}, _from, state) do
+  def handle_call({:list_by_date, tenant_id, date_str}, _from, state) do
     case Date.from_iso8601(date_str) do
       {:ok, target_date} ->
         workouts = state
           |> Map.values()
-          |> Enum.filter(fn w -> w["date"] == target_date |> to_string() end)
+          |> Enum.filter(fn w -> w["tenant_id"] == tenant_id and w["date"] == target_date |> to_string() end)
         {:reply, {:ok, workouts}, state}
 
       {:error, _} ->
@@ -233,6 +242,8 @@ defmodule BotArmyFitness.WorkoutStore do
   defp schema_to_map(%BotArmyFitness.Schemas.Workout{} = workout) do
     %{
       "id" => Ecto.UUID.cast!(workout.id) |> to_string(),
+      "tenant_id" => workout.tenant_id |> to_string(),
+      "user_id" => if(workout.user_id, do: workout.user_id |> to_string(), else: nil),
       "title" => workout.title,
       "date" => workout.date |> to_string(),
       "duration_minutes" => workout.duration_minutes,

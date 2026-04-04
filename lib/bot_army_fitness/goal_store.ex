@@ -51,17 +51,17 @@ defmodule BotArmyFitness.GoalStore do
 
   Returns `goal` or `nil`.
   """
-  def get(goal_id) when is_binary(goal_id) do
-    GenServer.call(@server, {:get, goal_id})
+  def get(tenant_id, goal_id) when is_binary(tenant_id) and is_binary(goal_id) do
+    GenServer.call(@server, {:get, tenant_id, goal_id})
   end
 
   @doc """
-  List all goals.
+  List all goals for a tenant.
 
   Returns list of goals.
   """
-  def list do
-    GenServer.call(@server, :list)
+  def list(tenant_id) when is_binary(tenant_id) do
+    GenServer.call(@server, {:list, tenant_id})
   end
 
   @doc """
@@ -96,7 +96,19 @@ defmodule BotArmyFitness.GoalStore do
   @impl true
   def handle_call({:create, payload}, _from, state) do
     try do
-      changeset = BotArmyFitness.Schemas.Goal.changeset(%BotArmyFitness.Schemas.Goal{}, payload)
+      goal_id = Ecto.UUID.generate()
+      changeset = BotArmyFitness.Schemas.Goal.changeset(
+        %BotArmyFitness.Schemas.Goal{id: goal_id},
+        %{
+          "tenant_id" => payload["tenant_id"],
+          "user_id" => Map.get(payload, "user_id"),
+          "title" => payload["title"],
+          "target_date" => payload["target_date"],
+          "status" => Map.get(payload, "status", "active"),
+          "goal_type" => payload["goal_type"],
+          "target_value" => Map.get(payload, "target_value")
+        }
+      )
       case BotArmyFitness.Repo.insert(changeset) do
         {:ok, goal} ->
           goal_map = schema_to_map(goal)
@@ -143,14 +155,17 @@ defmodule BotArmyFitness.GoalStore do
   end
 
   @impl true
-  def handle_call({:get, goal_id}, _from, state) do
+  def handle_call({:get, tenant_id, goal_id}, _from, state) do
     goal = Map.get(state, goal_id)
-    {:reply, goal, state}
+    result = if goal && goal["tenant_id"] == tenant_id, do: goal, else: nil
+    {:reply, result, state}
   end
 
   @impl true
-  def handle_call(:list, _from, state) do
-    goals = state |> Map.values()
+  def handle_call({:list, tenant_id}, _from, state) do
+    goals = state
+      |> Map.values()
+      |> Enum.filter(&(&1["tenant_id"] == tenant_id))
     {:reply, goals, state}
   end
 
@@ -164,6 +179,8 @@ defmodule BotArmyFitness.GoalStore do
   defp schema_to_map(goal) do
     %{
       "id" => goal.id |> to_string(),
+      "tenant_id" => goal.tenant_id |> to_string(),
+      "user_id" => if(goal.user_id, do: goal.user_id |> to_string(), else: nil),
       "title" => goal.title,
       "target_date" => goal.target_date,
       "status" => goal.status,

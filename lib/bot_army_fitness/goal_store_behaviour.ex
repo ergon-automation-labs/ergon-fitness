@@ -5,7 +5,7 @@ defmodule BotArmyFitness.GoalStoreBehaviour do
 
   @callback create(map) :: {:ok, map} | {:error, term}
   @callback update(binary, map) :: {:ok, map} | {:error, term}
-  @callback get(binary) :: map | nil
-  @callback list :: [map]
+  @callback get(binary, binary) :: map | nil
+  @callback list(binary) :: [map]
   @callback clear :: :ok
 end

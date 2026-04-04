@@ -14,16 +14,17 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
   Retrieves goal details and initiates LLM plan generation.
   """
   def handle_plan_request(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     goal_id = payload["goal_id"]
 
-    case goal_id && goal_store().get(goal_id) do
+    case goal_id && goal_store().get(tenant_id, goal_id) do
       nil ->
         Logger.warning("fitness.workout.plan.request: goal not found or missing goal_id")
         :ok
 
       goal ->
-        {:ok, workouts} = workout_store().list()
+        {:ok, workouts} = workout_store().list(tenant_id)
         plan_request_id = UUID.uuid4()
 
         llm_request = %{
@@ -32,7 +33,9 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
           "source_domain" => "fitness",
           "goal_id" => goal_id,
           "plan_request_id" => plan_request_id,
-          "model" => "quality"
+          "model" => "quality",
+          "tenant_id" => tenant_id,
+          "user_id" => user_id
         }
 
         BotArmyRuntime.NATS.Publisher.publish("llm.response.parse", llm_request)
@@ -47,6 +50,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
   Processes completed plan and publishes fitness.workout.plan.ready event.
   """
   def handle_llm_response(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with "fitness" <- payload["source_domain"],
@@ -59,6 +63,8 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
         "source_node" => node() |> Atom.to_string(),
         "triggered_by" => "fitness.llm",
         "schema_version" => "1.0",
+        "tenant_id" => tenant_id,
+        "user_id" => user_id,
         "payload" => %{
           "goal_id" => payload["goal_id"],
           "plan_request_id" => payload["plan_request_id"],

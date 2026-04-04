@@ -24,7 +24,7 @@ defmodule BotArmyFitness.Schemas.Goal do
   def changeset(goal, attrs) do
     goal
     |> cast(attrs, [:title, :target_date, :status, :goal_type, :target_value, :tenant_id, :user_id])
-    |> validate_required([:title, :target_date, :goal_type])
+    |> validate_required([:title, :target_date, :goal_type, :tenant_id])
     |> validate_inclusion(:status, ["active", "completed", "archived"])
   end
 end

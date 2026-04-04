@@ -116,6 +116,8 @@ defmodule BotArmyFitness.Handlers.GoalHandlerTest do
         "source_node" => "test_node",
         "triggered_by" => "manual",
         "schema_version" => "1.0",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "payload" => %{
           "goal_id" => UUID.uuid4()
         }
@@ -146,6 +148,8 @@ defmodule BotArmyFitness.Handlers.GoalHandlerTest do
       "source_node" => "test_node",
       "triggered_by" => "manual",
       "schema_version" => "1.0",
+      "tenant_id" => "00000000-0000-0000-0000-000000000001",
+      "user_id" => nil,
       "payload" => %{
         "goal_type" => "weight_loss",
         "target_value" => 70,
@@ -164,6 +168,8 @@ defmodule BotArmyFitness.Handlers.GoalHandlerTest do
       "source_node" => "test_node",
       "triggered_by" => "manual",
       "schema_version" => "1.0",
+      "tenant_id" => "00000000-0000-0000-0000-000000000001",
+      "user_id" => nil,
       "payload" => %{
         "goal_id" => UUID.uuid4(),
         "target_value" => 72,
