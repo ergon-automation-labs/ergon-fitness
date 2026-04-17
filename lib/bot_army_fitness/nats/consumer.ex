@@ -62,6 +62,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   def handle_continue(:subscribe, state) do
     case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
       {:ok, conn} ->
+        BotArmyRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to fitness topics")
 
         Enum.each(@subjects, fn subject ->
@@ -72,7 +73,10 @@ defmodule BotArmyFitness.NATS.Consumer do
         {:noreply, %{state | conn: conn}}
 
       {:error, reason} ->
-        Logger.warning("Failed to get NATS connection: #{inspect(reason)}, retrying in #{@reconnect_delay_ms}ms")
+        Logger.warning(
+          "Failed to get NATS connection: #{inspect(reason)}, retrying in #{@reconnect_delay_ms}ms"
+        )
+
         Process.send_after(self(), :retry_subscribe, @reconnect_delay_ms)
         {:noreply, state}
     end
@@ -85,15 +89,17 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   @impl true
   def handle_info({:msg, msg}, state) do
-    Logger.debug("Received NATS message on subject: #{msg.topic}")
+    BotArmyRuntime.Tracing.with_consumer_span(msg.topic, msg.headers, fn ->
+      Logger.debug("Received NATS message on subject: #{msg.topic}")
 
-    case BotArmyCore.NATS.Decoder.decode(msg.body) do
-      {:ok, decoded_message} ->
-        route_message(decoded_message, msg)
+      case BotArmyCore.NATS.Decoder.decode(msg.body) do
+        {:ok, decoded_message} ->
+          route_message(decoded_message, msg)
 
-      {:error, reason} ->
-        Logger.warning("Failed to decode message from #{msg.topic}: #{inspect(reason)}")
-    end
+        {:error, reason} ->
+          Logger.warning("Failed to decode message from #{msg.topic}: #{inspect(reason)}")
+      end
+    end)
 
     {:noreply, state}
   end
@@ -101,20 +107,20 @@ defmodule BotArmyFitness.NATS.Consumer do
   @impl true
   def handle_info(:reconnect, state) do
     Logger.info("Attempting to reconnect to NATS")
-    {:noreply, state, {:continue, :connect}}
+    {:noreply, state, {:continue, :subscribe}}
   end
 
   @impl true
   def handle_info({:nats, :disconnected}, state) do
     Logger.warning("Disconnected from NATS, will reconnect")
     Process.send_after(self(), :reconnect, @reconnect_delay_ms)
-    {:noreply, %{state | connection: nil}}
+    {:noreply, %{state | conn: nil, subscriptions: []}}
   end
 
   @impl true
   def handle_info({:nats, :connected}, state) do
-    Logger.info("Reconnected to NATS")
-    {:noreply, state}
+    Logger.info("Reconnected to NATS, re-subscribing")
+    {:noreply, state, {:continue, :subscribe}}
   end
 
   # Private functions
@@ -126,13 +132,26 @@ defmodule BotArmyFitness.NATS.Consumer do
     event = message["event"]
 
     case event do
-      "fitness.workout.log" -> BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
-      "fitness.goal.set" -> BotArmyFitness.Handlers.GoalHandler.handle_set(message)
-      "fitness.goal.update" -> BotArmyFitness.Handlers.GoalHandler.handle_update(message)
-      "fitness.goal.progress" -> handle_goal_progress(nats_msg, message)
-      "fitness.workout.plan.request" -> BotArmyFitness.Handlers.WorkoutPlanHandler.handle_plan_request(message)
-      "llm.response.parsed" -> BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
-      _ -> Logger.debug("Unknown Fitness event type: #{event}")
+      "fitness.workout.log" ->
+        BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+
+      "fitness.goal.set" ->
+        BotArmyFitness.Handlers.GoalHandler.handle_set(message)
+
+      "fitness.goal.update" ->
+        BotArmyFitness.Handlers.GoalHandler.handle_update(message)
+
+      "fitness.goal.progress" ->
+        handle_goal_progress(nats_msg, message)
+
+      "fitness.workout.plan.request" ->
+        BotArmyFitness.Handlers.WorkoutPlanHandler.handle_plan_request(message)
+
+      "llm.response.parsed" ->
+        BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
+
+      _ ->
+        Logger.debug("Unknown Fitness event type: #{event}")
     end
   end
 
@@ -143,19 +162,21 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       goal = BotArmyFitness.GoalStore.get(goal_id)
 
-      response = case goal do
-        nil ->
-          %{"error" => "Goal not found"}
+      response =
+        case goal do
+          nil ->
+            %{"error" => "Goal not found"}
 
-        goal_data ->
-          workouts_last_30 = count_recent_workouts(goal_id)
-          days_remaining = days_until_target(goal_data["target_date"])
-          %{
-            "goal" => goal_data,
-            "workouts_last_30_days" => workouts_last_30,
-            "days_remaining" => days_remaining
-          }
-      end
+          goal_data ->
+            workouts_last_30 = count_recent_workouts(goal_id)
+            days_remaining = days_until_target(goal_data["target_date"])
+
+            %{
+              "goal" => goal_data,
+              "workouts_last_30_days" => workouts_last_30,
+              "days_remaining" => days_remaining
+            }
+        end
 
       case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
         {:ok, conn} ->
@@ -176,7 +197,9 @@ defmodule BotArmyFitness.NATS.Consumer do
       case NaiveDateTime.from_iso8601(w["created_at"] || "") do
         {:ok, created_naive} ->
           DateTime.compare(DateTime.from_naive!(created_naive, "Etc/UTC"), thirty_days_ago) != :lt
-        _ -> false
+
+        _ ->
+          false
       end
     end)
   end

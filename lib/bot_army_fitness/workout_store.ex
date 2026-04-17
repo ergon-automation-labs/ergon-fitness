@@ -89,16 +89,22 @@ defmodule BotArmyFitness.WorkoutStore do
     Logger.info("WorkoutStore started")
     # Load all workouts from database into GenServer state
     # Gracefully handle database unavailability (e.g., in tests)
-    state = try do
-      workouts = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Workout)
-      Enum.reduce(workouts, %{}, fn workout, acc ->
-        Map.put(acc, workout.id |> to_string(), schema_to_map(workout))
-      end)
-    rescue
-      _ ->
-        Logger.warning("Could not load workouts from database (database unavailable). Starting with empty state.")
-        %{}
-    end
+    state =
+      try do
+        workouts = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Workout)
+
+        Enum.reduce(workouts, %{}, fn workout, acc ->
+          Map.put(acc, workout.id |> to_string(), schema_to_map(workout))
+        end)
+      rescue
+        _ ->
+          Logger.warning(
+            "Could not load workouts from database (database unavailable). Starting with empty state."
+          )
+
+          %{}
+      end
+
     {:ok, state}
   end
 
@@ -107,30 +113,36 @@ defmodule BotArmyFitness.WorkoutStore do
     workout_id = Ecto.UUID.generate()
 
     # Parse date if present
-    workout_date = case Map.get(payload, "date") do
-      nil -> Date.utc_today()
-      date_str when is_binary(date_str) ->
-        case Date.from_iso8601(date_str) do
-          {:ok, date} -> date
-          {:error, _} -> Date.utc_today()
-        end
-      _ -> Date.utc_today()
-    end
+    workout_date =
+      case Map.get(payload, "date") do
+        nil ->
+          Date.utc_today()
 
-    changeset = BotArmyFitness.Schemas.Workout.changeset(
-      %BotArmyFitness.Schemas.Workout{id: workout_id},
-      %{
-        "tenant_id" => payload["tenant_id"],
-        "user_id" => Map.get(payload, "user_id"),
-        "title" => payload["title"],
-        "date" => workout_date,
-        "duration_minutes" => payload["duration_minutes"],
-        "exercise_type" => payload["exercise_type"],
-        "intensity" => Map.get(payload, "intensity", "moderate"),
-        "calories" => Map.get(payload, "calories", 0),
-        "location" => Map.get(payload, "location")
-      }
-    )
+        date_str when is_binary(date_str) ->
+          case Date.from_iso8601(date_str) do
+            {:ok, date} -> date
+            {:error, _} -> Date.utc_today()
+          end
+
+        _ ->
+          Date.utc_today()
+      end
+
+    changeset =
+      BotArmyFitness.Schemas.Workout.changeset(
+        %BotArmyFitness.Schemas.Workout{id: workout_id},
+        %{
+          "tenant_id" => payload["tenant_id"],
+          "user_id" => Map.get(payload, "user_id"),
+          "title" => payload["title"],
+          "date" => workout_date,
+          "duration_minutes" => payload["duration_minutes"],
+          "exercise_type" => payload["exercise_type"],
+          "intensity" => Map.get(payload, "intensity", "moderate"),
+          "calories" => Map.get(payload, "calories", 0),
+          "location" => Map.get(payload, "location")
+        }
+      )
 
     case BotArmyFitness.Repo.insert(changeset) do
       {:ok, db_workout} ->
@@ -153,46 +165,62 @@ defmodule BotArmyFitness.WorkoutStore do
 
       _workout ->
         workout_uuid = Ecto.UUID.cast!(workout_id)
-        db_workout = BotArmyFitness.Repo.get(BotArmyFitness.Schemas.Workout, workout_uuid)
 
-        if db_workout do
-          # Parse date if present
-          workout_date = case Map.get(payload, "date") do
-            nil -> nil
-            date_str when is_binary(date_str) ->
-              case Date.from_iso8601(date_str) do
-                {:ok, date} -> date
-                {:error, _} -> nil
-              end
-            _ -> nil
-          end
+        case BotArmyFitness.Repo.transaction(fn ->
+               db_workout = BotArmyFitness.Repo.get(BotArmyFitness.Schemas.Workout, workout_uuid)
 
-          changeset = BotArmyFitness.Schemas.Workout.changeset(
-            db_workout,
-            %{
-              "title" => Map.get(payload, "title", db_workout.title),
-              "date" => workout_date || db_workout.date,
-              "duration_minutes" => Map.get(payload, "duration_minutes", db_workout.duration_minutes),
-              "exercise_type" => Map.get(payload, "exercise_type", db_workout.exercise_type),
-              "intensity" => Map.get(payload, "intensity", db_workout.intensity),
-              "calories" => Map.get(payload, "calories", db_workout.calories),
-              "location" => Map.get(payload, "location", db_workout.location)
-            }
-          )
+               if db_workout do
+                 workout_date =
+                   case Map.get(payload, "date") do
+                     nil ->
+                       nil
 
-          case BotArmyFitness.Repo.update(changeset) do
-            {:ok, updated_db_workout} ->
-              updated_workout = schema_to_map(updated_db_workout)
-              new_state = Map.put(state, workout_id, updated_workout)
-              Logger.info("Updated workout in database: #{workout_id}")
-              {:reply, {:ok, updated_workout}, new_state}
+                     date_str when is_binary(date_str) ->
+                       case Date.from_iso8601(date_str) do
+                         {:ok, date} -> date
+                         {:error, _} -> nil
+                       end
 
-            {:error, changeset} ->
-              Logger.error("Failed to update workout: #{inspect(changeset.errors)}")
-              {:reply, {:error, :database_error}, state}
-          end
-        else
-          {:reply, {:error, :not_found}, state}
+                     _ ->
+                       nil
+                   end
+
+                 changeset =
+                   BotArmyFitness.Schemas.Workout.changeset(
+                     db_workout,
+                     %{
+                       "title" => Map.get(payload, "title", db_workout.title),
+                       "date" => workout_date || db_workout.date,
+                       "duration_minutes" =>
+                         Map.get(payload, "duration_minutes", db_workout.duration_minutes),
+                       "exercise_type" =>
+                         Map.get(payload, "exercise_type", db_workout.exercise_type),
+                       "intensity" => Map.get(payload, "intensity", db_workout.intensity),
+                       "calories" => Map.get(payload, "calories", db_workout.calories),
+                       "location" => Map.get(payload, "location", db_workout.location)
+                     }
+                   )
+
+                 case BotArmyFitness.Repo.update(changeset) do
+                   {:ok, updated} -> updated
+                   {:error, changeset} -> BotArmyFitness.Repo.rollback(changeset)
+                 end
+               else
+                 BotArmyFitness.Repo.rollback(:not_found)
+               end
+             end) do
+          {:ok, updated_db_workout} ->
+            updated_workout = schema_to_map(updated_db_workout)
+            new_state = Map.put(state, workout_id, updated_workout)
+            Logger.info("Updated workout in database: #{workout_id}")
+            {:reply, {:ok, updated_workout}, new_state}
+
+          {:error, :not_found} ->
+            {:reply, {:error, :not_found}, state}
+
+          {:error, changeset} ->
+            Logger.error("Failed to update workout: #{inspect(changeset.errors)}")
+            {:reply, {:error, :database_error}, state}
         end
     end
   end
@@ -200,7 +228,9 @@ defmodule BotArmyFitness.WorkoutStore do
   @impl true
   def handle_call({:get, tenant_id, workout_id}, _from, state) do
     case Map.get(state, workout_id) do
-      nil -> {:reply, {:error, :not_found}, state}
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
       workout ->
         if workout["tenant_id"] == tenant_id do
           {:reply, {:ok, workout}, state}
@@ -212,9 +242,11 @@ defmodule BotArmyFitness.WorkoutStore do
 
   @impl true
   def handle_call({:list, tenant_id}, _from, state) do
-    workouts = state
+    workouts =
+      state
       |> Map.values()
       |> Enum.filter(&(&1["tenant_id"] == tenant_id))
+
     {:reply, {:ok, workouts}, state}
   end
 
@@ -222,9 +254,13 @@ defmodule BotArmyFitness.WorkoutStore do
   def handle_call({:list_by_date, tenant_id, date_str}, _from, state) do
     case Date.from_iso8601(date_str) do
       {:ok, target_date} ->
-        workouts = state
+        workouts =
+          state
           |> Map.values()
-          |> Enum.filter(fn w -> w["tenant_id"] == tenant_id and w["date"] == target_date |> to_string() end)
+          |> Enum.filter(fn w ->
+            w["tenant_id"] == tenant_id and w["date"] == target_date |> to_string()
+          end)
+
         {:reply, {:ok, workouts}, state}
 
       {:error, _} ->

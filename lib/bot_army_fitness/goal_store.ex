@@ -80,16 +80,22 @@ defmodule BotArmyFitness.GoalStore do
     Logger.info("GoalStore started")
     # Load all goals from database into GenServer state
     # Gracefully handle database unavailability (e.g., in tests)
-    state = try do
-      goals = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Goal)
-      Enum.reduce(goals, %{}, fn goal, acc ->
-        Map.put(acc, goal.id |> to_string(), schema_to_map(goal))
-      end)
-    rescue
-      _ ->
-        Logger.warning("Could not load goals from database (database unavailable). Starting with empty state.")
-        %{}
-    end
+    state =
+      try do
+        goals = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Goal)
+
+        Enum.reduce(goals, %{}, fn goal, acc ->
+          Map.put(acc, goal.id |> to_string(), schema_to_map(goal))
+        end)
+      rescue
+        _ ->
+          Logger.warning(
+            "Could not load goals from database (database unavailable). Starting with empty state."
+          )
+
+          %{}
+      end
+
     {:ok, state}
   end
 
@@ -97,18 +103,21 @@ defmodule BotArmyFitness.GoalStore do
   def handle_call({:create, payload}, _from, state) do
     try do
       goal_id = Ecto.UUID.generate()
-      changeset = BotArmyFitness.Schemas.Goal.changeset(
-        %BotArmyFitness.Schemas.Goal{id: goal_id},
-        %{
-          "tenant_id" => payload["tenant_id"],
-          "user_id" => Map.get(payload, "user_id"),
-          "title" => payload["title"],
-          "target_date" => payload["target_date"],
-          "status" => Map.get(payload, "status", "active"),
-          "goal_type" => payload["goal_type"],
-          "target_value" => Map.get(payload, "target_value")
-        }
-      )
+
+      changeset =
+        BotArmyFitness.Schemas.Goal.changeset(
+          %BotArmyFitness.Schemas.Goal{id: goal_id},
+          %{
+            "tenant_id" => payload["tenant_id"],
+            "user_id" => Map.get(payload, "user_id"),
+            "title" => payload["title"],
+            "target_date" => payload["target_date"],
+            "status" => Map.get(payload, "status", "active"),
+            "goal_type" => payload["goal_type"],
+            "target_value" => Map.get(payload, "target_value")
+          }
+        )
+
       case BotArmyFitness.Repo.insert(changeset) do
         {:ok, goal} ->
           goal_map = schema_to_map(goal)
@@ -129,23 +138,32 @@ defmodule BotArmyFitness.GoalStore do
   @impl true
   def handle_call({:update, goal_id, payload}, _from, state) do
     try do
-      case BotArmyFitness.Repo.get(BotArmyFitness.Schemas.Goal, goal_id) do
-        nil ->
+      case BotArmyFitness.Repo.transaction(fn ->
+             case BotArmyFitness.Repo.get(BotArmyFitness.Schemas.Goal, goal_id) do
+               nil ->
+                 BotArmyFitness.Repo.rollback(:not_found)
+
+               goal ->
+                 changeset = BotArmyFitness.Schemas.Goal.changeset(goal, payload)
+
+                 case BotArmyFitness.Repo.update(changeset) do
+                   {:ok, updated} -> updated
+                   {:error, reason} -> BotArmyFitness.Repo.rollback(reason)
+                 end
+             end
+           end) do
+        {:ok, updated_goal} ->
+          goal_map = schema_to_map(updated_goal)
+          new_state = Map.put(state, goal_id, goal_map)
+          {:reply, {:ok, goal_map}, new_state}
+
+        {:error, :not_found} ->
           Logger.warning("Goal not found: #{goal_id}")
           {:reply, {:error, :not_found}, state}
 
-        goal ->
-          changeset = BotArmyFitness.Schemas.Goal.changeset(goal, payload)
-          case BotArmyFitness.Repo.update(changeset) do
-            {:ok, updated_goal} ->
-              goal_map = schema_to_map(updated_goal)
-              new_state = Map.put(state, goal_id, goal_map)
-              {:reply, {:ok, goal_map}, new_state}
-
-            {:error, reason} ->
-              Logger.warning("Failed to update goal: #{inspect(reason)}")
-              {:reply, {:error, reason}, state}
-          end
+        {:error, reason} ->
+          Logger.warning("Failed to update goal: #{inspect(reason)}")
+          {:reply, {:error, reason}, state}
       end
     rescue
       e ->
@@ -163,9 +181,11 @@ defmodule BotArmyFitness.GoalStore do
 
   @impl true
   def handle_call({:list, tenant_id}, _from, state) do
-    goals = state
+    goals =
+      state
       |> Map.values()
       |> Enum.filter(&(&1["tenant_id"] == tenant_id))
+
     {:reply, goals, state}
   end
 
