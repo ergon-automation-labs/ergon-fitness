@@ -1,5 +1,6 @@
 defmodule BotArmyFitness.Handlers.GoalHandlerTest do
   use ExUnit.Case
+  @moduletag :handlers
   import Mox
 
   setup :set_mox_global
@@ -8,9 +9,11 @@ defmodule BotArmyFitness.Handlers.GoalHandlerTest do
     stub(BotArmyFitness.GoalStoreMock, :create, fn _payload ->
       {:ok, %{"id" => UUID.uuid4(), "title" => "test goal"}}
     end)
+
     stub(BotArmyFitness.GoalStoreMock, :update, fn _goal_id, _payload ->
       {:ok, %{"id" => UUID.uuid4(), "title" => "test goal"}}
     end)
+
     :ok
   end
 

@@ -1,5 +1,6 @@
 defmodule BotArmyFitnessTest do
   use ExUnit.Case
+  @moduletag :core
   doctest BotArmyFitness
 
   test "version" do
