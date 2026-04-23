@@ -5,34 +5,34 @@ defmodule BotArmyFitness.Repo.Migrations.AddTenantAndUserId do
     default_tenant_id = "00000000-0000-0000-0000-000000000001"
 
     # Add tenant_id and user_id to workouts (idempotent)
-    alter table(:workouts) do
-      add(:tenant_id, :uuid, null: true) unless Ecto.Migration.column_exists?(:workouts, :tenant_id)
-      add(:user_id, :uuid, null: true) unless Ecto.Migration.column_exists?(:workouts, :user_id)
-    rescue
-      _ -> nil
+    unless Ecto.Migration.column_exists?(:workouts, :tenant_id) do
+      alter table(:workouts) do
+        add(:tenant_id, :uuid, null: true)
+        add(:user_id, :uuid, null: true)
+      end
+
+      create(index(:workouts, [:tenant_id]))
+      create(index(:workouts, [:user_id]))
+
+      execute(
+        "UPDATE workouts SET tenant_id = '#{default_tenant_id}'::uuid WHERE tenant_id IS NULL"
+      )
     end
-
-    create(index(:workouts, [:tenant_id])) unless Ecto.Migration.index_exists?(:workouts, [:tenant_id])
-    create(index(:workouts, [:user_id])) unless Ecto.Migration.index_exists?(:workouts, [:user_id])
-
-    execute(
-      "UPDATE workouts SET tenant_id = '#{default_tenant_id}'::uuid WHERE tenant_id IS NULL"
-    ) unless Ecto.Migration.column_exists?(:workouts, :tenant_id)
 
     # Add tenant_id and user_id to goals (idempotent)
-    alter table(:goals) do
-      add(:tenant_id, :uuid, null: true) unless Ecto.Migration.column_exists?(:goals, :tenant_id)
-      add(:user_id, :uuid, null: true) unless Ecto.Migration.column_exists?(:goals, :user_id)
-    rescue
-      _ -> nil
+    unless Ecto.Migration.column_exists?(:goals, :tenant_id) do
+      alter table(:goals) do
+        add(:tenant_id, :uuid, null: true)
+        add(:user_id, :uuid, null: true)
+      end
+
+      create(index(:goals, [:tenant_id]))
+      create(index(:goals, [:user_id]))
+
+      execute(
+        "UPDATE goals SET tenant_id = '#{default_tenant_id}'::uuid WHERE tenant_id IS NULL"
+      )
     end
-
-    create(index(:goals, [:tenant_id])) unless Ecto.Migration.index_exists?(:goals, [:tenant_id])
-    create(index(:goals, [:user_id])) unless Ecto.Migration.index_exists?(:goals, [:user_id])
-
-    execute(
-      "UPDATE goals SET tenant_id = '#{default_tenant_id}'::uuid WHERE tenant_id IS NULL"
-    ) unless Ecto.Migration.column_exists?(:goals, :tenant_id)
   end
 
   def down do
