@@ -27,14 +27,20 @@ defmodule BotArmyFitness.NATS.Consumer do
   require Logger
 
   @reconnect_delay_ms 5000
+  @version Mix.Project.config()[:version]
+  @registry_heartbeat_ms 20_000
 
   @subjects [
-    "fitness.workout.log",
-    "fitness.goal.set",
-    "fitness.goal.update",
-    "fitness.goal.progress",
-    "fitness.workout.plan.request",
-    "events.llm.response.parsed"
+    %{subject: "fitness.workout.log", type: :subscribe, description: "Log workout"},
+    %{subject: "fitness.goal.set", type: :subscribe, description: "Set fitness goal"},
+    %{subject: "fitness.goal.update", type: :subscribe, description: "Update fitness goal"},
+    %{subject: "fitness.goal.progress", type: :subscribe, description: "Report goal progress"},
+    %{
+      subject: "fitness.workout.plan.request",
+      type: :request_reply,
+      description: "Request workout plan"
+    },
+    %{subject: "events.llm.response.parsed", type: :subscribe, description: "LLM response parsed"}
   ]
 
   # API
@@ -65,11 +71,13 @@ defmodule BotArmyFitness.NATS.Consumer do
         BotArmyRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to fitness topics")
 
-        Enum.each(@subjects, fn subject ->
+        Enum.each(@subjects, fn %{subject: subject} ->
           Gnat.sub(conn, self(), subject)
           Logger.info("Fitness consumer subscribed to #{subject}")
         end)
 
+        BotArmyRuntime.Registry.register("fitness", @subjects, @version)
+        Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
         {:noreply, %{state | conn: conn}}
 
       {:error, reason} ->
@@ -121,6 +129,16 @@ defmodule BotArmyFitness.NATS.Consumer do
   def handle_info({:nats, :connected}, state) do
     Logger.info("Reconnected to NATS, re-subscribing")
     {:noreply, state, {:continue, :subscribe}}
+  end
+
+  @impl true
+  def handle_info(:registry_heartbeat, state) do
+    if length(state.subscriptions) > 0 do
+      BotArmyRuntime.Registry.register("fitness", @subjects, @version)
+      Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
+    end
+
+    {:noreply, state}
   end
 
   # Private functions
