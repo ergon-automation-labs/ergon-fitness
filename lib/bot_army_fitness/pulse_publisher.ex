@@ -76,10 +76,9 @@ defmodule BotArmyFitness.PulsePublisher do
       }
 
       subject = "bot.fitness.pulse"
-      message = Jason.encode!(payload)
 
-      case BotArmyRuntime.NATS.Connection.publish(subject, message) do
-        :ok -> Logger.info("[PulsePublisher] Published fitness pulse")
+      case BotArmyRuntime.NATS.Publisher.publish(subject, payload) do
+        {:ok, _} -> Logger.info("[PulsePublisher] Published fitness pulse")
         {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
       end
     rescue
