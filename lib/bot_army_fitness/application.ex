@@ -21,6 +21,7 @@ defmodule BotArmyFitness.Application do
       |> maybe_add_goal_store()
       |> maybe_add_goal_scheduler()
       |> maybe_add_pulse_publisher()
+      |> maybe_add_veto_listener()
       |> maybe_add_consumer()
 
     opts = [strategy: :one_for_one, name: BotArmyFitness.Supervisor]
@@ -49,5 +50,19 @@ defmodule BotArmyFitness.Application do
 
   defp maybe_add_consumer(children) do
     if @env == :test, do: children, else: [{BotArmyFitness.NATS.Consumer, []} | children]
+  end
+
+  defp maybe_add_veto_listener(children) do
+    if @env == :test do
+      children
+    else
+      veto_rules = [
+        [bot: "gtd", action: "nudge", custom: &BotArmyFitness.VetoRules.veto_stale_nudge/1],
+        [bot: "gtd", action: "remind"]
+      ]
+
+      child = {BotArmyRuntime.Intent.VetoListener, rules: veto_rules, bot_name: "fitness"}
+      [child | children]
+    end
   end
 end
