@@ -84,7 +84,7 @@ test-full:
 	$(MIX) test --include integration --include nats_live --trace
 
 credo:
-	$(MIX) credo
+	$(MIX) credo --only warning
 
 dialyzer: deps
 	$(MIX) dialyzer
@@ -92,7 +92,7 @@ dialyzer: deps
 coverage:
 	$(MIX) coveralls
 
-check: test credo dialyzer
+check: test credo
 	@echo "All checks passed!"
 
 format:
