@@ -21,6 +21,7 @@ defmodule BotArmyFitness.Application do
       |> maybe_add_goal_store()
       |> maybe_add_goal_scheduler()
       |> maybe_add_pulse_publisher()
+      |> maybe_add_intent_evaluator()
       |> maybe_add_veto_listener()
       |> maybe_add_consumer()
 
@@ -50,6 +51,10 @@ defmodule BotArmyFitness.Application do
 
   defp maybe_add_consumer(children) do
     if @env == :test, do: children, else: [{BotArmyFitness.NATS.Consumer, []} | children]
+  end
+
+  defp maybe_add_intent_evaluator(children) do
+    if @env == :test, do: children, else: [{BotArmyFitness.IntentEvaluator, []} | children]
   end
 
   defp maybe_add_veto_listener(children) do

@@ -53,7 +53,8 @@ defmodule BotArmyFitness.PulsePublisher do
 
   @impl true
   def handle_info(:publish, state) do
-    publish_pulse(state)
+    pulse = publish_pulse(state)
+    BotArmyFitness.IntentEvaluator.record_observations(pulse)
     schedule_publish()
     {:noreply, %{workouts: 0, streak_days: state.streak_days, active_goals: 0}}
   end
@@ -93,6 +94,11 @@ defmodule BotArmyFitness.PulsePublisher do
           "workouts" => metrics.workouts,
           "streak_days" => metrics.streak_days,
           "active_goals" => metrics.active_goals
+        },
+        "observations" => %{
+          "idle_minutes" => if(metrics.workouts == 0, do: 60, else: 0),
+          "streak_at_risk" =>
+            if(metrics.streak_days > 0 and metrics.workouts == 0, do: 1, else: 0)
         }
       }
 
@@ -102,8 +108,12 @@ defmodule BotArmyFitness.PulsePublisher do
         {:ok, _} -> Logger.info("[PulsePublisher] Published fitness pulse")
         {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
       end
+
+      payload
     rescue
-      e -> Logger.error("[PulsePublisher] Error: #{inspect(e)}")
+      e ->
+        Logger.error("[PulsePublisher] Error: #{inspect(e)}")
+        %{}
     end
   end
 end

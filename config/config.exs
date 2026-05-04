@@ -17,6 +17,13 @@ end
 # Ecto repositories for migrations
 config :bot_army_fitness, ecto_repos: [BotArmyFitness.Repo]
 
+# Intent thresholds for fitness heartbeat decisions
+config :bot_army_fitness, :intent_thresholds, %{
+  idle_minutes: %{min: 60, weight: 0.7},
+  streak_at_risk: %{min: 1, weight: 0.3},
+  random_threshold: 0.4
+}
+
 # Database configuration — defaults only, overridden by config/runtime.exs at startup
 config :bot_army_fitness, BotArmyFitness.Repo,
   database: "ergon_fitness",

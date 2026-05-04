@@ -40,7 +40,16 @@ defmodule BotArmyFitness.NATS.Consumer do
       type: :request_reply,
       description: "Request workout plan"
     },
-    %{subject: "events.llm.response.parsed", type: :subscribe, description: "LLM response parsed"}
+    %{
+      subject: "events.llm.response.parsed",
+      type: :subscribe,
+      description: "LLM response parsed"
+    },
+    %{
+      subject: "bot_army.fitness.intent.suggest_workout",
+      type: :subscribe,
+      description: "Intent: suggest workout"
+    }
   ]
 
   # API
