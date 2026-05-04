@@ -63,7 +63,12 @@ defmodule BotArmyFitness.Application do
     else
       veto_rules = [
         [bot: "gtd", action: "nudge", custom: &BotArmyFitness.VetoRules.veto_stale_nudge/1],
-        [bot: "gtd", action: "remind"]
+        [bot: "gtd", action: "remind"],
+        [
+          bot: "chore",
+          action: "remind_overdue",
+          custom: &BotArmyFitness.VetoRules.veto_chore_remind_after_workout/1
+        ]
       ]
 
       child = {BotArmyRuntime.Intent.VetoListener, rules: veto_rules, bot_name: "fitness"}

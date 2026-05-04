@@ -25,4 +25,16 @@ defmodule BotArmyFitness.VetoRules do
       _entry -> false
     end
   end
+
+  @doc """
+  Veto chore remind_overdue when the user just worked out.
+  Don't pile on chore reminders right after exercise — give them a breather.
+  """
+  @spec veto_chore_remind_after_workout(map()) :: boolean()
+  def veto_chore_remind_after_workout(_envelope) do
+    case AccumulatedContext.latest("fitness", :workout_logged) do
+      nil -> false
+      _entry -> true
+    end
+  end
 end
