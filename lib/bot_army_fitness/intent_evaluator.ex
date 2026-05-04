@@ -6,6 +6,7 @@ defmodule BotArmyFitness.IntentEvaluator do
   require Logger
 
   alias BotArmyRuntime.Intent.AccumulatedContext
+  alias BotArmyRuntime.Intent.DeferHandler
   alias BotArmyRuntime.Intent.Publisher
   alias BotArmyRuntime.Intent.ThresholdModel
 
@@ -35,7 +36,7 @@ defmodule BotArmyFitness.IntentEvaluator do
   @impl true
   def init(_opts) do
     Process.send_after(self(), :evaluate, @evaluate_interval_ms)
-    {:ok, %{last_evaluation: nil}}
+    {:ok, %{last_evaluation: nil, pending_defers: %{}}}
   end
 
   @impl true
@@ -54,8 +55,32 @@ defmodule BotArmyFitness.IntentEvaluator do
   @impl true
   def handle_info(:evaluate, state) do
     results = do_evaluate()
+    new_pending = process_defer_results(results, state.pending_defers)
     Process.send_after(self(), :evaluate, @evaluate_interval_ms)
-    {:noreply, %{state | last_evaluation: DateTime.utc_now()}}
+    {:noreply, %{state | last_evaluation: DateTime.utc_now(), pending_defers: new_pending}}
+  end
+
+  @impl true
+  def handle_info({:conv_reply, conversation_id, body}, state) do
+    case Map.get(state.pending_defers, conversation_id) do
+      nil ->
+        Logger.debug("[Fitness.Intent] Ignoring conv_reply for unknown conversation")
+        {:noreply, state}
+
+      {action, details, config} ->
+        DeferHandler.process_reply(@bot_name, conversation_id, body, details, config)
+        {:noreply, %{state | pending_defers: Map.delete(state.pending_defers, conversation_id)}}
+    end
+  end
+
+  @impl true
+  def handle_info({:conv_timeout, conversation_id}, state) do
+    if Map.has_key?(state.pending_defers, conversation_id) do
+      Logger.debug("[Fitness.Intent] Defer conversation timed out")
+      {:noreply, %{state | pending_defers: Map.delete(state.pending_defers, conversation_id)}}
+    else
+      {:noreply, state}
+    end
   end
 
   defp do_evaluate do
@@ -89,7 +114,7 @@ defmodule BotArmyFitness.IntentEvaluator do
 
       {:ok, :defer, details} ->
         Logger.debug("[Fitness.Intent] Deferring #{action} (score=#{details.score})")
-        []
+        [{:deferred, action, details, context}]
 
       {:ok, :abort, details} ->
         Logger.debug("[Fitness.Intent] Aborting #{action} (score=#{details.score})")
@@ -101,6 +126,83 @@ defmodule BotArmyFitness.IntentEvaluator do
       {:error, reason} ->
         Logger.warning("[Fitness.Intent] Error evaluating #{action}: #{inspect(reason)}")
         []
+    end
+  end
+
+  defp process_defer_results(results, pending_defers) do
+    Enum.reduce(results, pending_defers, fn
+      {:deferred, action, details, context}, acc ->
+        config = defer_config(action)
+
+        if config do
+          case DeferHandler.handle_defer(@bot_name, action, details, context, config) do
+            {:ok, conversation_id} ->
+              Map.put(acc, conversation_id, {action, details, config})
+
+            _ ->
+              acc
+          end
+        else
+          acc
+        end
+
+      _result, acc ->
+        acc
+    end)
+  end
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Defer Configuration
+  # ───────────────────────────────────────────────────────────────────────────
+
+  defp defer_config("suggest_workout") do
+    [
+      prompt_builder: &__MODULE__.build_suggest_workout_defer_prompt/3,
+      delivery_fn: &__MODULE__.deliver_defer_message/4,
+      llm_intent: "classify",
+      timeout_ms: 15_000
+    ]
+  end
+
+  defp defer_config(_), do: nil
+
+  @doc false
+  def build_suggest_workout_defer_prompt(action, details, context) do
+    idle_min = get_in(context, [:summary, :idle_minutes]) || 0
+
+    %{
+      "intent" => "classify",
+      "text" =>
+        "The user has been idle for #{div(trunc(idle_min), 60)} hours but conditions " <>
+          "don't warrant a full workout suggestion (score #{Float.round(details.score, 2)}, " <>
+          "reason: #{details.reason}). Write a one-sentence gentle encouragement " <>
+          "about movement or activity. If not useful, respond: skip"
+    }
+  end
+
+  @doc false
+  def deliver_defer_message(bot_name, action, llm_response, _details) do
+    message =
+      case llm_response do
+        %{"response" => "skip"} -> nil
+        %{"response" => text} when is_binary(text) -> String.trim(text)
+        _ -> nil
+      end
+
+    if message do
+      BotArmyRuntime.NATS.Publisher.publish("notification.route.request", %{
+        "event_id" => UUID.uuid4(),
+        "triggered_by" => bot_name,
+        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+        "category" => "health",
+        "urgency" => "ambient",
+        "title" => "#{String.capitalize(action)} suggestion",
+        "body" => message
+      })
+
+      :ok
+    else
+      :ok
     end
   end
 
