@@ -6,6 +6,7 @@ defmodule BotArmyFitness.IntentEvaluator do
   require Logger
 
   alias BotArmyRuntime.Intent.AccumulatedContext
+  alias BotArmyRuntime.Intent.ActionHandler
   alias BotArmyRuntime.Intent.DeferHandler
   alias BotArmyRuntime.Intent.Publisher
   alias BotArmyRuntime.Intent.ThresholdModel
@@ -56,6 +57,7 @@ defmodule BotArmyFitness.IntentEvaluator do
   def handle_info(:evaluate, state) do
     results = do_evaluate()
     new_pending = process_defer_results(results, state.pending_defers)
+    process_act_results(results)
     Process.send_after(self(), :evaluate, @evaluate_interval_ms)
     {:noreply, %{state | last_evaluation: DateTime.utc_now(), pending_defers: new_pending}}
   end
@@ -149,6 +151,62 @@ defmodule BotArmyFitness.IntentEvaluator do
       _result, acc ->
         acc
     end)
+  end
+
+  defp process_act_results(results) do
+    Enum.each(results, fn
+      {:acted, action, intent_id, details, endorsements} ->
+        config = act_config(action)
+
+        ActionHandler.execute_action(
+          @bot_name,
+          action,
+          intent_id,
+          details,
+          endorsements,
+          config
+        )
+
+      _result ->
+        :ok
+    end)
+  end
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Act Configuration
+  # ───────────────────────────────────────────────────────────────────────────
+
+  defp act_config("suggest_workout") do
+    [
+      handler_fn: &__MODULE__.handle_suggest_workout_action/5
+    ]
+  end
+
+  defp act_config(_), do: nil
+
+  @doc false
+  def handle_suggest_workout_action(bot_name, action, _intent_id, details, _endorsements) do
+    BotArmyRuntime.NATS.Publisher.publish("notification.route.request", %{
+      "event_id" => UUID.uuid4(),
+      "triggered_by" => bot_name,
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "category" => "health",
+      "urgency" => "normal",
+      "title" => "Workout suggestion",
+      "body" => workout_body(details)
+    })
+  end
+
+  defp workout_body(details) do
+    idle_min = Map.get(details, :idle_minutes, 0)
+    hours = div(trunc(idle_min), 60)
+    streak = Map.get(details, :streak_at_risk, 0)
+
+    cond do
+      streak > 0 -> "Your workout streak is at risk — even a short session counts today."
+      hours > 0 -> "You've been idle for #{hours} hour#{if hours != 1, do: "s", else: ""} — a quick workout could help."
+      true -> "Time for a workout? Your body will thank you."
+    end
   end
 
   # ───────────────────────────────────────────────────────────────────────────
