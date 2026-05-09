@@ -36,7 +36,14 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
         case workout_store().create(store_payload) do
           {:ok, workout} ->
             Logger.info("Workout logged: event_id=#{event_id}, workout_id=#{workout["id"]}")
-            publish_event("fitness.workout.logged", Map.put(payload, "workout_id", workout["id"]), event_id, tenant_id, user_id)
+
+            publish_event(
+              "fitness.workout.logged",
+              Map.put(payload, "workout_id", workout["id"]),
+              event_id,
+              tenant_id,
+              user_id
+            )
 
           {:error, reason} ->
             Logger.warning("Failed to persist workout: #{inspect(reason)}")
@@ -78,6 +85,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       "schema_version" => "1.0",
       "tenant_id" => tenant_id,
       "user_id" => user_id,
+      "intensity" => Map.get(payload, "intensity", "moderate"),
+      "workout_type" => payload["workout_type"],
       "payload" => %{
         "workout_type" => payload["workout_type"],
         "duration_minutes" => payload["duration_minutes"],

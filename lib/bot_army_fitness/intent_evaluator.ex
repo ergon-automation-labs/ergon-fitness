@@ -203,9 +203,14 @@ defmodule BotArmyFitness.IntentEvaluator do
     streak = Map.get(details, :streak_at_risk, 0)
 
     cond do
-      streak > 0 -> "Your workout streak is at risk — even a short session counts today."
-      hours > 0 -> "You've been idle for #{hours} hour#{if hours != 1, do: "s", else: ""} — a quick workout could help."
-      true -> "Time for a workout? Your body will thank you."
+      streak > 0 ->
+        "Your workout streak is at risk — even a short session counts today."
+
+      hours > 0 ->
+        "You've been idle for #{hours} hour#{if hours != 1, do: "s", else: ""} — a quick workout could help."
+
+      true ->
+        "Time for a workout? Your body will thank you."
     end
   end
 
@@ -217,7 +222,7 @@ defmodule BotArmyFitness.IntentEvaluator do
     [
       prompt_builder: &__MODULE__.build_suggest_workout_defer_prompt/3,
       delivery_fn: &__MODULE__.deliver_defer_message/4,
-      llm_intent: "classify",
+      llm_intent: "ask",
       timeout_ms: 15_000
     ]
   end
@@ -229,7 +234,6 @@ defmodule BotArmyFitness.IntentEvaluator do
     idle_min = get_in(context, [:summary, :idle_minutes]) || 0
 
     %{
-      "intent" => "classify",
       "text" =>
         "The user has been idle for #{div(trunc(idle_min), 60)} hours but conditions " <>
           "don't warrant a full workout suggestion (score #{Float.round(details.score, 2)}, " <>
