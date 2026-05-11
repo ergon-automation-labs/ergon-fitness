@@ -12,6 +12,65 @@ defmodule BotArmyFitness.Handlers.ChatHandlerTest do
     end
   end
 
+  describe "build_prompt/2" do
+    test "includes narrative context when session is active" do
+      narrative = %{
+        "session_status" => "active",
+        "scene_description" => "The training grounds at dawn",
+        "character" => %{"name" => "The Drillmaster", "class" => "Drillmaster"},
+        "theme" => %{"setting" => "cyberpunk", "tone" => "hopeful"},
+        "scene_facts" => ["Rain began falling on the harbor"]
+      }
+
+      prompt = BotArmyFitness.Handlers.ChatHandler.build_prompt("how was my week?", narrative)
+
+      assert prompt =~ "Fitness Bot for Ergon Labs"
+      assert prompt =~ "Resistance Chronicle context:"
+      assert prompt =~ "The training grounds at dawn"
+      assert prompt =~ "The Drillmaster (Drillmaster)"
+      assert prompt =~ "cyberpunk, hopeful"
+      assert prompt =~ "Rain began falling on the harbor"
+      assert prompt =~ "how was my week?"
+    end
+
+    test "omits narrative section when session is not active" do
+      narrative = %{
+        "session_status" => "paused",
+        "scene_description" => "The harbor at night",
+        "scene_facts" => []
+      }
+
+      prompt = BotArmyFitness.Handlers.ChatHandler.build_prompt("how was my week?", narrative)
+
+      refute prompt =~ "Resistance Chronicle context:"
+      assert prompt =~ "how was my week?"
+    end
+
+    test "omits narrative section when narrative is empty" do
+      prompt = BotArmyFitness.Handlers.ChatHandler.build_prompt("how was my week?", %{})
+
+      refute prompt =~ "Resistance Chronicle context:"
+      assert prompt =~ "how was my week?"
+    end
+
+    test "builds narrative with partial context" do
+      narrative = %{
+        "session_status" => "active",
+        "scene_description" => "The training grounds at dawn",
+        "character" => %{},
+        "theme" => %{},
+        "scene_facts" => []
+      }
+
+      prompt = BotArmyFitness.Handlers.ChatHandler.build_prompt("how was my week?", narrative)
+
+      assert prompt =~ "Resistance Chronicle context:"
+      assert prompt =~ "The training grounds at dawn"
+      refute prompt =~ "Character:"
+      refute prompt =~ "Theme:"
+    end
+  end
+
   describe "extract_text/1" do
     test "extracts completion field" do
       assert {:ok, "hello"} =
