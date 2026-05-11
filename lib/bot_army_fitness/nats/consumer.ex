@@ -41,6 +41,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Request workout plan"
     },
     %{
+      subject: "fitness.chat",
+      type: :request_reply,
+      description: "Conversational chat with fitness persona"
+    },
+    %{
       subject: "events.llm.response.parsed",
       type: :subscribe,
       description: "LLM response parsed"
@@ -173,6 +178,9 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       "fitness.workout.plan.request" ->
         BotArmyFitness.Handlers.WorkoutPlanHandler.handle_plan_request(message)
+
+      "fitness.chat" ->
+        BotArmyFitness.Handlers.ChatHandler.handle_chat(message, nats_msg.reply_to)
 
       "llm.response.parsed" ->
         BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
