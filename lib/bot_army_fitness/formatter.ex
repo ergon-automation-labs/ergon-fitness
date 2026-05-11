@@ -23,11 +23,6 @@ defmodule BotArmyFitness.Formatter do
     )
   end
 
-  @doc """
-  Format streak milestone notification.
-
-  Used when a streak reaches a milestone.
-  """
   def format(:streak_milestone, %{"days" => days}) do
     Formatter.with_symbol(
       :fitness_bot,
@@ -35,11 +30,6 @@ defmodule BotArmyFitness.Formatter do
     )
   end
 
-  @doc """
-  Format goal progress notification.
-
-  Used to report progress toward a fitness goal.
-  """
   def format(:goal_progress, %{"goal" => goal, "progress" => progress}) do
     Formatter.with_symbol(
       :fitness_bot,
@@ -47,11 +37,6 @@ defmodule BotArmyFitness.Formatter do
     )
   end
 
-  @doc """
-  Format recovery day notification.
-
-  Used to signal a scheduled rest day.
-  """
   def format(:recovery_day, %{}) do
     Formatter.with_symbol(
       :fitness_bot,
@@ -59,11 +44,6 @@ defmodule BotArmyFitness.Formatter do
     )
   end
 
-  @doc """
-  Format workout plan ready notification.
-
-  Used when a new workout plan is generated.
-  """
   def format(:plan_ready, %{"weeks" => weeks}) do
     Formatter.with_symbol(
       :fitness_bot,
@@ -71,11 +51,6 @@ defmodule BotArmyFitness.Formatter do
     )
   end
 
-  @doc """
-  Format error notification.
-
-  Used when something goes wrong.
-  """
   def format(:error, %{"message" => message}) do
     Formatter.with_symbol(:fitness_bot, "Something went wrong: #{message}")
   end

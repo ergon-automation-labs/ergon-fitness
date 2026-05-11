@@ -194,8 +194,9 @@ defmodule BotArmyFitness.NATS.Consumer do
     if nats_msg.reply_to do
       payload = message["payload"] || %{}
       goal_id = payload["goal_id"]
+      tenant_id = message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id()
 
-      goal = BotArmyFitness.GoalStore.get(goal_id)
+      goal = BotArmyFitness.GoalStore.get(tenant_id, goal_id)
 
       response =
         case goal do
@@ -203,7 +204,7 @@ defmodule BotArmyFitness.NATS.Consumer do
             %{"error" => "Goal not found"}
 
           goal_data ->
-            workouts_last_30 = count_recent_workouts(goal_id)
+            workouts_last_30 = count_recent_workouts(tenant_id)
             days_remaining = days_until_target(goal_data["target_date"])
 
             %{
@@ -224,8 +225,8 @@ defmodule BotArmyFitness.NATS.Consumer do
     end
   end
 
-  defp count_recent_workouts(_goal_id) do
-    {:ok, workouts} = BotArmyFitness.WorkoutStore.list()
+  defp count_recent_workouts(tenant_id) do
+    {:ok, workouts} = BotArmyFitness.WorkoutStore.list(tenant_id)
     thirty_days_ago = DateTime.add(DateTime.utc_now(), -30, :day)
 
     Enum.count(workouts, fn w ->

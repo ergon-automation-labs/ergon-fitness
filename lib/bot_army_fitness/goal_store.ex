@@ -33,42 +33,27 @@ defmodule BotArmyFitness.GoalStore do
 
   Returns `{:ok, goal}` with the created goal, or `{:error, reason}`.
   """
+  @impl true
   def create(payload) when is_map(payload) do
     GenServer.call(@server, {:create, payload})
   end
 
-  @doc """
-  Update an existing goal.
-
-  Returns `{:ok, goal}` with the updated goal, or `{:error, reason}`.
-  """
+  @impl true
   def update(goal_id, payload) when is_binary(goal_id) and is_map(payload) do
     GenServer.call(@server, {:update, goal_id, payload})
   end
 
-  @doc """
-  Retrieve a goal by ID.
-
-  Returns `goal` or `nil`.
-  """
+  @impl true
   def get(tenant_id, goal_id) when is_binary(tenant_id) and is_binary(goal_id) do
     GenServer.call(@server, {:get, tenant_id, goal_id})
   end
 
-  @doc """
-  List all goals for a tenant.
-
-  Returns list of goals.
-  """
+  @impl true
   def list(tenant_id) when is_binary(tenant_id) do
     GenServer.call(@server, {:list, tenant_id})
   end
 
-  @doc """
-  Clear all goals (for testing).
-
-  Returns `:ok`.
-  """
+  @impl true
   def clear do
     GenServer.call(@server, :clear)
   end

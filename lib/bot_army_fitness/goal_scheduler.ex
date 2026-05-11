@@ -35,14 +35,16 @@ defmodule BotArmyFitness.GoalScheduler do
   defp ms_until_next_midnight do
     now = DateTime.utc_now()
     # Calculate tomorrow at 00:00:00 UTC
-    tomorrow_at_midnight = now
+    tomorrow_at_midnight =
+      now
       |> DateTime.add(1, :day)
       |> then(fn dt -> DateTime.new!(DateTime.to_date(dt), ~T[00:00:00], "Etc/UTC") end)
+
     DateTime.diff(tomorrow_at_midnight, now, :millisecond)
   end
 
   defp check_goals_nearing_deadline do
-    goals = BotArmyFitness.GoalStore.list()
+    goals = BotArmyFitness.GoalStore.list(BotArmyCore.Tenant.default_tenant_id())
 
     Enum.each(goals, fn goal ->
       if should_remind_goal(goal) do
@@ -53,14 +55,17 @@ defmodule BotArmyFitness.GoalScheduler do
 
   defp should_remind_goal(goal) do
     case goal["target_date"] do
-      nil -> false
+      nil ->
+        false
+
       date_str ->
         case Date.from_iso8601(date_str) do
           {:ok, target_date} ->
             days_remaining = Date.diff(target_date, Date.utc_today())
             days_remaining > 0 && days_remaining <= 7
 
-          _ -> false
+          _ ->
+            false
         end
     end
   end

@@ -33,51 +33,32 @@ defmodule BotArmyFitness.WorkoutStore do
 
   Returns `{:ok, workout}` with the created workout, or `{:error, reason}`.
   """
+  @impl true
   def create(payload) when is_map(payload) do
     GenServer.call(@server, {:create, payload})
   end
 
-  @doc """
-  Update an existing workout.
-
-  Returns `{:ok, workout}` with the updated workout, or `{:error, reason}`.
-  """
+  @impl true
   def update(workout_id, payload) when is_binary(workout_id) and is_map(payload) do
     GenServer.call(@server, {:update, workout_id, payload})
   end
 
-  @doc """
-  Retrieve a workout by ID.
-
-  Returns `{:ok, workout}` or `{:error, :not_found}`.
-  """
+  @impl true
   def get(tenant_id, workout_id) when is_binary(tenant_id) and is_binary(workout_id) do
     GenServer.call(@server, {:get, tenant_id, workout_id})
   end
 
-  @doc """
-  List all workouts for a tenant.
-
-  Returns `{:ok, workouts}`.
-  """
+  @impl true
   def list(tenant_id) when is_binary(tenant_id) do
     GenServer.call(@server, {:list, tenant_id})
   end
 
-  @doc """
-  List workouts for a specific date and tenant.
-
-  Returns `{:ok, workouts}`.
-  """
+  @impl true
   def list_by_date(tenant_id, date_str) when is_binary(tenant_id) and is_binary(date_str) do
     GenServer.call(@server, {:list_by_date, tenant_id, date_str})
   end
 
-  @doc """
-  Clear all workouts (for testing).
-
-  Returns `:ok`.
-  """
+  @impl true
   def clear do
     GenServer.call(@server, :clear)
   end
