@@ -54,6 +54,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       subject: "bot_army.fitness.intent.suggest_workout",
       type: :subscribe,
       description: "Intent: suggest workout"
+    },
+    %{
+      subject: "discord.check_in.response",
+      type: :subscribe,
+      description: "Discord check-in response (done/defer)"
     }
   ]
 
@@ -185,6 +190,9 @@ defmodule BotArmyFitness.NATS.Consumer do
       "llm.response.parsed" ->
         BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
 
+      "discord.check_in.response" ->
+        handle_check_in_response(message)
+
       _ ->
         Logger.debug("Unknown Fitness event type: #{event}")
     end
@@ -239,6 +247,41 @@ defmodule BotArmyFitness.NATS.Consumer do
       end
     end)
   end
+
+  defp handle_check_in_response(message) do
+    payload = message["payload"] || %{}
+
+    if payload["bot_name"] == "fitness" and payload["status"] == "done" do
+      # Derive duration from rep scheme (rough estimate)
+      duration = estimate_duration(payload["reps"])
+
+      log_payload = %{
+        "event_id" => message["event_id"] || Elixir.UUID.uuid4(),
+        "tenant_id" => message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id(),
+        "user_id" => payload["user_id"],
+        "payload" => %{
+          "workout_type" => payload["exercise"] || "workout",
+          "duration_minutes" => duration,
+          "equipment" => payload["equipment"],
+          "intensity" => "moderate"
+        }
+      }
+
+      BotArmyFitness.Handlers.WorkoutHandler.handle_log(log_payload)
+    end
+  end
+
+  defp estimate_duration(reps) when is_binary(reps) do
+    cond do
+      String.contains?(reps, "3 sets") -> 30
+      String.contains?(reps, "4 sets") -> 40
+      String.contains?(reps, "5 sets") -> 50
+      String.contains?(reps, "2 sets") -> 20
+      true -> 30
+    end
+  end
+
+  defp estimate_duration(_), do: 30
 
   defp days_until_target(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do
