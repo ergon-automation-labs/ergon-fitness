@@ -90,7 +90,8 @@ defmodule BotArmyFitness.IntentEvaluator do
     thresholds = get_thresholds()
     context = AccumulatedContext.snapshot(@bot_name)
 
-    evaluate_intent("suggest_workout", thresholds, context)
+    evaluate_intent("suggest_workout", thresholds, context) ++
+      evaluate_intent("propose_social_check_in", thresholds, context)
   end
 
   defp evaluate_intent(action, thresholds, context) do
@@ -183,6 +184,12 @@ defmodule BotArmyFitness.IntentEvaluator do
     ]
   end
 
+  defp act_config("propose_social_check_in") do
+    [
+      handler_fn: &__MODULE__.handle_propose_social_check_in_action/5
+    ]
+  end
+
   defp act_config(_), do: nil
 
   @doc false
@@ -196,6 +203,35 @@ defmodule BotArmyFitness.IntentEvaluator do
       "title" => "#{String.capitalize(action)} suggestion",
       "body" => workout_body(details)
     })
+  end
+
+  @doc false
+  def handle_propose_social_check_in_action(bot_name, _action, _intent_id, details, _endorsements) do
+    days = Map.get(details, :days_since_workout, 0)
+    score = Map.get(details, :score, 0.5)
+
+    if days >= 3 do
+      message = %{
+        "event_id" => UUID.uuid4(),
+        "event" => "gossip.social.invite",
+        "schema_version" => "1.0",
+        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+        "source" => "bot_army_fitness",
+        "tenant_id" => BotArmyRuntime.Tenant.default_tenant_id(),
+        "conversation_id" => UUID.uuid4(),
+        "payload" => %{
+          "from_bot" => bot_name,
+          "to_bot" => "gtd_bot",
+          "topic" => "streak_at_risk",
+          "adaptive_score" => score,
+          "cooldown_seconds" => 86_400,
+          "days_since_workout" => days
+        }
+      }
+
+      BotArmyRuntime.NATS.Publisher.publish("gossip.social.invite", message)
+      Logger.info("[Fitness.Intent] Proposed social check-in to gtd_bot (days=#{days})")
+    end
   end
 
   defp workout_body(details) do
@@ -299,6 +335,24 @@ defmodule BotArmyFitness.IntentEvaluator do
           %{
             type: :streak_at_risk,
             value: streak_risk,
+            observed_at: DateTime.utc_now(),
+            metadata: %{source: "pulse"}
+          }
+          | observations
+        ]
+      else
+        observations
+      end
+
+    days_since =
+      get_in(pulse_data, ["observations", "days_since_workout"]) || 0
+
+    observations =
+      if days_since > 0 do
+        [
+          %{
+            type: :days_since_workout,
+            value: days_since,
             observed_at: DateTime.utc_now(),
             metadata: %{source: "pulse"}
           }
