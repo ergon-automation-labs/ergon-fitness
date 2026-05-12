@@ -69,7 +69,8 @@ defmodule BotArmyFitness.IntentEvaluator do
         Logger.debug("[Fitness.Intent] Ignoring conv_reply for unknown conversation")
         {:noreply, state}
 
-      {_action, details, config} ->
+      {action, details, config} ->
+        Logger.debug("[Fitness.Intent] Processing #{action} defer reply for #{conversation_id}")
         DeferHandler.process_reply(@bot_name, conversation_id, body, details, config)
         {:noreply, %{state | pending_defers: Map.delete(state.pending_defers, conversation_id)}}
     end
@@ -185,14 +186,14 @@ defmodule BotArmyFitness.IntentEvaluator do
   defp act_config(_), do: nil
 
   @doc false
-  def handle_suggest_workout_action(bot_name, _action, _intent_id, details, _endorsements) do
+  def handle_suggest_workout_action(bot_name, action, _intent_id, details, _endorsements) do
     BotArmyRuntime.NATS.Publisher.publish("notification.route.request", %{
       "event_id" => UUID.uuid4(),
       "triggered_by" => bot_name,
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
       "category" => "health",
       "urgency" => "normal",
-      "title" => "Workout suggestion",
+      "title" => "#{String.capitalize(action)} suggestion",
       "body" => workout_body(details)
     })
   end
@@ -230,13 +231,13 @@ defmodule BotArmyFitness.IntentEvaluator do
   defp defer_config(_), do: nil
 
   @doc false
-  def build_suggest_workout_defer_prompt(_action, details, context) do
+  def build_suggest_workout_defer_prompt(action, details, context) do
     idle_min = get_in(context, [:summary, :idle_minutes]) || 0
 
     %{
       "text" =>
         "The user has been idle for #{div(trunc(idle_min), 60)} hours but conditions " <>
-          "don't warrant a full workout suggestion (score #{Float.round(details.score, 2)}, " <>
+          "don't warrant a full #{action} (score #{Float.round(details.score, 2)}, " <>
           "reason: #{details.reason}). Write a one-sentence gentle encouragement " <>
           "about movement or activity. If not useful, respond: skip"
     }
