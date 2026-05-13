@@ -109,11 +109,47 @@ defmodule BotArmyFitness.PulsePublisher do
         {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
       end
 
+      maybe_publish_tavern_gossip(metrics)
+
       payload
     rescue
       e ->
         Logger.error("[PulsePublisher] Error: #{inspect(e)}")
         %{}
+    end
+  end
+
+  defp maybe_publish_tavern_gossip(metrics) do
+    text =
+      cond do
+        metrics.workouts > 0 and metrics.streak_days >= 7 ->
+          "🏋️ #{metrics.workouts} workout#{if(metrics.workouts > 1, do: "s", else: "")} logged. Streak burns at #{metrics.streak_days} days. The forge is hot."
+
+        metrics.workouts > 0 ->
+          "🏋️ #{metrics.workouts} workout#{if(metrics.workouts > 1, do: "s", else: "")} logged today. Keep the rhythm."
+
+        metrics.streak_days > 0 and metrics.streak_days >= 3 ->
+          "⚠️ Streak at #{metrics.streak_days} days but no workout yet. The iron grows cold."
+
+        metrics.active_goals > 0 ->
+          "📍 #{metrics.active_goals} goal#{if(metrics.active_goals > 1, do: "s", else: "")} active. Waiting for movement."
+
+        true ->
+          nil
+      end
+
+    if text do
+      gossip = %{
+        "event" => "gossip.tavern.narrated",
+        "source" => "fitness_bot",
+        "text" => text,
+        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+
+      case BotArmyRuntime.NATS.Publisher.publish("gossip.tavern.narrated", gossip) do
+        {:ok, _} -> Logger.info("[PulsePublisher] Published tavern gossip")
+        {:error, reason} -> Logger.warning("[PulsePublisher] Gossip failed: #{inspect(reason)}")
+      end
     end
   end
 end
