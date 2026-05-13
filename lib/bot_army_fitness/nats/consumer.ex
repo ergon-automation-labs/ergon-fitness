@@ -59,6 +59,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       subject: "discord.check_in.response",
       type: :subscribe,
       description: "Discord check-in response (done/defer)"
+    },
+    %{
+      subject: "gossip.tavern.narrated",
+      type: :subscribe,
+      description: "Tavern gossip reactions"
     }
   ]
 
@@ -193,8 +198,77 @@ defmodule BotArmyFitness.NATS.Consumer do
       "discord.check_in.response" ->
         handle_check_in_response(message)
 
+      "gossip.tavern.narrated" ->
+        maybe_react_to_gossip(message)
+
       _ ->
         Logger.debug("Unknown Fitness event type: #{event}")
+    end
+  end
+
+  @react_probability 0.10
+
+  defp maybe_react_to_gossip(message) do
+    payload = message["payload"] || message || %{}
+    source = to_string(payload["source"] || "")
+    text = to_string(payload["text"] || "")
+
+    # Skip self, skip reactions to reactions
+    if source == "fitness_bot" or source == "" or is_reaction?(payload) do
+      :ok
+    else
+      if :rand.uniform() < @react_probability do
+        reaction = build_reaction(text)
+        publish_tavern_reaction(reaction)
+      end
+    end
+  end
+
+  defp is_reaction?(payload) do
+    Map.has_key?(payload, "reacting_to") or Map.get(payload, "reaction", false) == true
+  end
+
+  defp build_reaction(text) do
+    down = String.downcase(text)
+
+    cond do
+      String.contains?(down, "lesson") or String.contains?(down, "study") or
+          String.contains?(down, "learning") ->
+        "Good time for a walk while that lesson settles."
+
+      String.contains?(down, "workout") or String.contains?(down, "exercise") or
+          String.contains?(down, "fitness") ->
+        "Another patron keeping the forge hot."
+
+      String.contains?(down, "completed") or String.contains?(down, "done") or
+          String.contains?(down, "finished") ->
+        "Momentum builds. Don't let it cool."
+
+      String.contains?(down, "failed") or String.contains?(down, "error") or
+          String.contains?(down, "broke") ->
+        "Even the best iron breaks. Rest, then return."
+
+      String.contains?(down, "proposal") or String.contains?(down, "factory") ->
+        "A strong body builds strong systems."
+
+      true ->
+        "The tavern feels alive tonight."
+    end
+  end
+
+  defp publish_tavern_reaction(text) do
+    payload = %{
+      "event" => "gossip.tavern.narrated",
+      "source" => "fitness_bot",
+      "text" => text,
+      "reaction" => true,
+      "reacting_to" => "tavern",
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+
+    case BotArmyRuntime.NATS.Publisher.publish("gossip.tavern.narrated", payload) do
+      {:ok, _} -> Logger.info("[Fitness] Tavern reaction: #{text}")
+      {:error, reason} -> Logger.warning("[Fitness] Reaction publish failed: #{inspect(reason)}")
     end
   end
 
@@ -251,23 +325,39 @@ defmodule BotArmyFitness.NATS.Consumer do
   defp handle_check_in_response(message) do
     payload = message["payload"] || %{}
 
-    if payload["bot_name"] == "fitness" and payload["status"] == "done" do
-      # Derive duration from rep scheme (rough estimate)
-      duration = estimate_duration(payload["reps"])
+    if payload["bot_name"] == "fitness" do
+      case payload["status"] do
+        "done" ->
+          duration = estimate_duration(payload["reps"])
 
-      log_payload = %{
-        "event_id" => message["event_id"] || Elixir.UUID.uuid4(),
-        "tenant_id" => message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id(),
-        "user_id" => payload["user_id"],
-        "payload" => %{
-          "workout_type" => payload["exercise"] || "workout",
-          "duration_minutes" => duration,
-          "equipment" => payload["equipment"],
-          "intensity" => "moderate"
-        }
-      }
+          log_payload = %{
+            "event_id" => message["event_id"] || Elixir.UUID.uuid4(),
+            "tenant_id" => message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id(),
+            "user_id" => payload["user_id"],
+            "payload" => %{
+              "workout_type" => payload["exercise"] || "workout",
+              "duration_minutes" => duration,
+              "equipment" => payload["equipment"],
+              "intensity" => "moderate"
+            }
+          }
 
-      BotArmyFitness.Handlers.WorkoutHandler.handle_log(log_payload)
+          BotArmyFitness.Handlers.WorkoutHandler.handle_log(log_payload)
+
+        "deferred" ->
+          defer_count =
+            BotArmyRuntime.DeferTracker.record_defer(
+              to_string(payload["user_id"]),
+              "fitness"
+            )
+
+          Logger.info(
+            "[Fitness] User #{payload["user_id"]} deferred check-in. Count: #{defer_count}"
+          )
+
+        _ ->
+          :ok
+      end
     end
   end
 
