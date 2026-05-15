@@ -21,9 +21,11 @@ defmodule BotArmyFitness.Application do
       |> maybe_add_goal_store()
       |> maybe_add_goal_scheduler()
       |> maybe_add_pulse_publisher()
+      |> maybe_add_tavern_memory()
       |> maybe_add_intent_evaluator()
       |> maybe_add_veto_listener()
       |> maybe_add_consumer()
+      |> maybe_add_outcome_tracker()
 
     opts = [strategy: :one_for_one, name: BotArmyFitness.Supervisor]
     Supervisor.start_link(children, opts)
@@ -74,5 +76,13 @@ defmodule BotArmyFitness.Application do
       child = {BotArmyRuntime.Intent.VetoListener, rules: veto_rules, bot_name: "fitness"}
       [child | children]
     end
+  end
+
+  defp maybe_add_tavern_memory(children) do
+    if @env == :test, do: children, else: [{BotArmyFitness.TavernMemory, []} | children]
+  end
+
+  defp maybe_add_outcome_tracker(children) do
+    if @env == :test, do: children, else: [{BotArmyLearning.OutcomeTracker, []} | children]
   end
 end

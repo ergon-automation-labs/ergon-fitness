@@ -37,6 +37,18 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
           {:ok, workout} ->
             Logger.info("Workout logged: event_id=#{event_id}, workout_id=#{workout["id"]}")
 
+            # Record outcome: workout was completed
+            try do
+              BotArmyLearning.OutcomeTracker.record(
+                workout["id"],
+                "fitness.workout",
+                "suggested",
+                "completed"
+              )
+            rescue
+              _ -> :ok
+            end
+
             publish_event(
               "fitness.workout.logged",
               Map.put(payload, "workout_id", workout["id"]),
