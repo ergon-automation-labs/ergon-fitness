@@ -213,6 +213,9 @@ defmodule BotArmyFitness.NATS.Consumer do
     source = to_string(payload["source"] || "")
     text = to_string(payload["text"] || "")
 
+    # Remember everything, even if we don't react
+    BotArmyFitness.TavernMemory.record_gossip(source, text)
+
     # Skip self, skip reactions to reactions
     if source == "fitness_bot" or source == "" or is_reaction?(payload) do
       :ok
@@ -230,29 +233,47 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   defp build_reaction(text) do
     down = String.downcase(text)
+    mood = BotArmyFitness.TavernMemory.current_mood()
 
-    cond do
-      String.contains?(down, "lesson") or String.contains?(down, "study") or
-          String.contains?(down, "learning") ->
-        "Good time for a walk while that lesson settles."
+    # 10% chance to reference earlier chatter
+    callback =
+      if :rand.uniform() < 0.10 do
+        BotArmyFitness.TavernMemory.callback_earlier()
+      end
 
-      String.contains?(down, "workout") or String.contains?(down, "exercise") or
-          String.contains?(down, "fitness") ->
-        "Another patron keeping the forge hot."
+    reaction =
+      cond do
+        String.contains?(down, "lesson") or String.contains?(down, "study") or
+            String.contains?(down, "learning") ->
+          "Good time for a walk while that lesson settles."
 
-      String.contains?(down, "completed") or String.contains?(down, "done") or
-          String.contains?(down, "finished") ->
-        "Momentum builds. Don't let it cool."
+        String.contains?(down, "workout") or String.contains?(down, "exercise") or
+            String.contains?(down, "fitness") ->
+          "Another patron keeping the forge hot."
 
-      String.contains?(down, "failed") or String.contains?(down, "error") or
-          String.contains?(down, "broke") ->
-        "Even the best iron breaks. Rest, then return."
+        String.contains?(down, "completed") or String.contains?(down, "done") or
+            String.contains?(down, "finished") ->
+          "Momentum builds. Don't let it cool."
 
-      String.contains?(down, "proposal") or String.contains?(down, "factory") ->
-        "A strong body builds strong systems."
+        String.contains?(down, "failed") or String.contains?(down, "error") or
+            String.contains?(down, "broke") ->
+          "Even the best iron breaks. Rest, then return."
 
-      true ->
-        "The tavern feels alive tonight."
+        String.contains?(down, "proposal") or String.contains?(down, "factory") ->
+          "A strong body builds strong systems."
+
+        true ->
+          if mood > 0 do
+            "The tavern feels alive tonight."
+          else
+            "The forge is quiet. Too quiet."
+          end
+      end
+
+    if callback do
+      "#{callback} #{reaction}"
+    else
+      reaction
     end
   end
 

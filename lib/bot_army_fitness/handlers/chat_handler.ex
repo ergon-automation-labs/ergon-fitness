@@ -207,9 +207,10 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
   end
 
   defp reply(reply_to, payload) do
-    with {:ok, conn} <- GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
-      Gnat.pub(conn, reply_to, Jason.encode!(payload))
-    else
+    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+      {:ok, conn} ->
+        Gnat.pub(conn, reply_to, Jason.encode!(payload))
+
       {:error, reason} ->
         Logger.warning("[ChatHandler] Failed to publish reply: #{inspect(reason)}")
     end
