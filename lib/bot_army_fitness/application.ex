@@ -83,6 +83,8 @@ defmodule BotArmyFitness.Application do
   end
 
   defp maybe_add_outcome_tracker(children) do
-    if @env == :test, do: children, else: [{BotArmyLearning.OutcomeTracker, []} | children]
+    if @env == :test,
+      do: children,
+      else: [{BotArmyLearning.OutcomeTracker, [repo: BotArmyFitness.Repo]} | children]
   end
 end
