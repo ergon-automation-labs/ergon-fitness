@@ -82,41 +82,38 @@ defmodule BotArmyFitness.PulsePublisher do
   end
 
   defp publish_pulse(metrics) do
-    try do
-      health_signal =
-        if metrics.workouts > 0 or metrics.streak_days > 0, do: "nominal", else: "degraded"
+    health_signal =
+      if metrics.workouts > 0 or metrics.streak_days > 0, do: "nominal", else: "degraded"
 
-      payload = %{
-        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "service" => "fitness",
-        "health_signal" => health_signal,
-        "metrics" => %{
-          "workouts" => metrics.workouts,
-          "streak_days" => metrics.streak_days,
-          "active_goals" => metrics.active_goals
-        },
-        "observations" => %{
-          "idle_minutes" => if(metrics.workouts == 0, do: 60, else: 0),
-          "streak_at_risk" =>
-            if(metrics.streak_days > 0 and metrics.workouts == 0, do: 1, else: 0)
-        }
+    payload = %{
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "service" => "fitness",
+      "health_signal" => health_signal,
+      "metrics" => %{
+        "workouts" => metrics.workouts,
+        "streak_days" => metrics.streak_days,
+        "active_goals" => metrics.active_goals
+      },
+      "observations" => %{
+        "idle_minutes" => if(metrics.workouts == 0, do: 60, else: 0),
+        "streak_at_risk" => if(metrics.streak_days > 0 and metrics.workouts == 0, do: 1, else: 0)
       }
+    }
 
-      subject = "bot.fitness.pulse"
+    subject = "bot.fitness.pulse"
 
-      case BotArmyRuntime.NATS.Publisher.publish(subject, payload) do
-        {:ok, _} -> Logger.info("[PulsePublisher] Published fitness pulse")
-        {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
-      end
-
-      maybe_publish_tavern_gossip(metrics)
-
-      payload
-    rescue
-      e ->
-        Logger.error("[PulsePublisher] Error: #{inspect(e)}")
-        %{}
+    case BotArmyRuntime.NATS.Publisher.publish(subject, payload) do
+      {:ok, _} -> Logger.info("[PulsePublisher] Published fitness pulse")
+      {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
     end
+
+    maybe_publish_tavern_gossip(metrics)
+
+    payload
+  rescue
+    e ->
+      Logger.error("[PulsePublisher] Error: #{inspect(e)}")
+      %{}
   end
 
   defp maybe_publish_tavern_gossip(metrics) do

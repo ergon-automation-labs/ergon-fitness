@@ -23,15 +23,23 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
 
     case validate_set_payload(payload) do
       :ok ->
-        store_payload = Map.merge(payload, %{
-          "tenant_id" => tenant_id,
-          "user_id" => user_id
-        })
+        store_payload =
+          Map.merge(payload, %{
+            "tenant_id" => tenant_id,
+            "user_id" => user_id
+          })
 
         case goal_store().create(store_payload) do
           {:ok, goal} ->
             Logger.info("Fitness goal set: event_id=#{event_id}, goal_id=#{goal["id"]}")
-            publish_event("fitness.goal.set", Map.put(payload, "goal_id", goal["id"]), event_id, tenant_id, user_id)
+
+            publish_event(
+              "fitness.goal.set",
+              Map.put(payload, "goal_id", goal["id"]),
+              event_id,
+              tenant_id,
+              user_id
+            )
 
           {:error, reason} ->
             Logger.warning("Failed to persist goal: #{inspect(reason)}")
@@ -56,14 +64,18 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
 
     case validate_update_payload(payload) do
       :ok ->
-        store_payload = Map.merge(payload, %{
-          "tenant_id" => tenant_id,
-          "user_id" => user_id
-        })
+        store_payload =
+          Map.merge(payload, %{
+            "tenant_id" => tenant_id,
+            "user_id" => user_id
+          })
 
         case goal_store().update(payload["goal_id"], store_payload) do
           {:ok, _goal} ->
-            Logger.info("Fitness goal updated: event_id=#{event_id}, goal_id=#{payload["goal_id"]}")
+            Logger.info(
+              "Fitness goal updated: event_id=#{event_id}, goal_id=#{payload["goal_id"]}"
+            )
+
             publish_event("fitness.goal.updated", payload, event_id, tenant_id, user_id)
 
           {:error, :not_found} ->
@@ -87,6 +99,8 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
     with :ok <- require_field(payload, "goal_type"),
          :ok <- require_field(payload, "target_value") do
       :ok
+    else
+      error -> error
     end
   end
 

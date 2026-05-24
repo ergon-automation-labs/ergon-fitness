@@ -74,6 +74,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
     with :ok <- require_field(payload, "workout_type"),
          :ok <- require_field(payload, "duration_minutes") do
       :ok
+    else
+      error -> error
     end
   end
 
