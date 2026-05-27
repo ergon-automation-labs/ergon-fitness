@@ -43,7 +43,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
                 workout["id"],
                 "fitness.workout",
                 "suggested",
-                "completed"
+                "completed",
+                :fitness_outcome_tracker
               )
             rescue
               _ -> :ok
