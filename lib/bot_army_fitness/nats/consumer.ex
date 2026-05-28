@@ -100,7 +100,10 @@ defmodule BotArmyFitness.NATS.Consumer do
           Logger.info("Fitness consumer subscribed to #{subject}")
         end)
 
-        BotArmyRuntime.Registry.register("fitness", @subjects, @version)
+        deployment_status =
+          Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
+
+        Registry.register("fitness", @subjects, @version, deployment_status)
         Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
         {:noreply, %{state | conn: conn}}
 
@@ -158,7 +161,10 @@ defmodule BotArmyFitness.NATS.Consumer do
   @impl true
   def handle_info(:registry_heartbeat, state) do
     if state.subscriptions != [] do
-      BotArmyRuntime.Registry.register("fitness", @subjects, @version)
+      BotArmyRuntime.deployment_status() =
+        Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
+
+      Registry.register("fitness", @subjects, @version, deployment_status)
       Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
     end
 
