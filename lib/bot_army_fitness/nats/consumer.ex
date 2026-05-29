@@ -46,6 +46,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Conversational chat with fitness persona"
     },
     %{
+      subject: "fitness.workout.today",
+      type: :request_reply,
+      description: "Get today's workout plan"
+    },
+    %{
       subject: "events.llm.response.parsed",
       type: :subscribe,
       description: "LLM response parsed"
@@ -161,7 +166,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   @impl true
   def handle_info(:registry_heartbeat, state) do
     if state.subscriptions != [] do
-      BotArmyRuntime.deployment_status() =
+      deployment_status =
         Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
 
       Registry.register("fitness", @subjects, @version, deployment_status)
@@ -197,6 +202,10 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       "fitness.chat" ->
         BotArmyFitness.Handlers.ChatHandler.handle_chat(message, nats_msg.reply_to)
+
+      "fitness.workout.today" ->
+        response = BotArmyFitness.Handlers.TodayPlanHandler.handle_request(message)
+        BotArmyCore.NATS.Reply.ok(nats_msg, response)
 
       "llm.response.parsed" ->
         BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
