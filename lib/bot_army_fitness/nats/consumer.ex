@@ -52,6 +52,16 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Get today's workout plan"
     },
     %{
+      subject: "fitness.exercises.list_by_equipment",
+      type: :request_reply,
+      description: "List personal exercises by equipment type"
+    },
+    %{
+      subject: "fitness.exercises.save",
+      type: :request_reply,
+      description: "Save custom exercise to personal library"
+    },
+    %{
       subject: "events.llm.response.parsed",
       type: :subscribe,
       description: "LLM response parsed"
@@ -213,6 +223,29 @@ defmodule BotArmyFitness.NATS.Consumer do
 
           {:error, reason} ->
             Logger.warning("[TodayPlanHandler] Failed to reply: #{inspect(reason)}")
+        end
+
+      "fitness.exercises.list_by_equipment" ->
+        response =
+          BotArmyFitness.Handlers.PersonalExercisesHandler.handle_list_by_equipment(message)
+
+        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+          {:ok, conn} ->
+            Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
+
+          {:error, reason} ->
+            Logger.warning("[PersonalExercisesHandler] Failed to reply: #{inspect(reason)}")
+        end
+
+      "fitness.exercises.save" ->
+        response = BotArmyFitness.Handlers.PersonalExercisesHandler.handle_save_exercise(message)
+
+        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+          {:ok, conn} ->
+            Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
+
+          {:error, reason} ->
+            Logger.warning("[PersonalExercisesHandler] Failed to reply: #{inspect(reason)}")
         end
 
       "llm.response.parsed" ->
