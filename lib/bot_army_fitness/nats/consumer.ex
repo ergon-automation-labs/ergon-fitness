@@ -25,6 +25,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   use GenServer
   require Logger
+  alias BotArmyRuntime.Registry
 
   @reconnect_delay_ms 5000
   @version Mix.Project.config()[:version]
@@ -205,7 +206,14 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       "fitness.workout.today" ->
         response = BotArmyFitness.Handlers.TodayPlanHandler.handle_request(message)
-        BotArmyCore.NATS.Reply.ok(nats_msg, response)
+
+        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+          {:ok, conn} ->
+            Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
+
+          {:error, reason} ->
+            Logger.warning("[TodayPlanHandler] Failed to reply: #{inspect(reason)}")
+        end
 
       "llm.response.parsed" ->
         BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)

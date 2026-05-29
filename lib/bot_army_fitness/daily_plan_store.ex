@@ -28,11 +28,37 @@ defmodule BotArmyFitness.DailyPlanStore do
       generated_at: DateTime.utc_now()
     }
 
-    case Repo.insert_or_update_by(
-           DailyPlan,
-           [tenant_id: tenant_id, date: today],
-           plan_attrs
-         ) do
+    existing = Repo.get_by(DailyPlan, tenant_id: tenant_id, date: today)
+
+    plan_to_save =
+      if existing do
+        Ecto.Changeset.cast(existing, plan_attrs, [
+          :type,
+          :estimated_minutes,
+          :motivational_quote,
+          :video_url,
+          :exercises,
+          :notes,
+          :plan_json,
+          :generated_at
+        ])
+      else
+        DailyPlan
+        |> Ecto.Changeset.cast(plan_attrs, [
+          :tenant_id,
+          :date,
+          :type,
+          :estimated_minutes,
+          :motivational_quote,
+          :video_url,
+          :exercises,
+          :notes,
+          :plan_json,
+          :generated_at
+        ])
+      end
+
+    case Repo.insert_or_update(plan_to_save) do
       {:ok, plan} ->
         Logger.info("[DailyPlanStore] Created/updated plan for #{tenant_id} on #{today}")
         {:ok, plan}
