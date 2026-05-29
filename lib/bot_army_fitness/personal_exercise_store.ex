@@ -59,13 +59,54 @@ defmodule BotArmyFitness.PersonalExerciseStore do
     end
   end
 
+  def update_comfort(tenant_id, name, reps_achieved, reps_target, user_rating \\ nil) do
+    case Repo.get_by(PersonalExercise, tenant_id: tenant_id, name: name) do
+      nil ->
+        {:error, :not_found}
+
+      exercise ->
+        # Auto-adjust comfort based on performance
+        auto_adjust =
+          cond do
+            reps_achieved >= reps_target -> 0.5
+            reps_achieved >= reps_target - 1 -> 0.2
+            reps_achieved >= reps_target - 2 -> 0.0
+            true -> -0.5
+          end
+
+        # User manual rating (1-10 scale) blended with auto-adjust
+        final_comfort =
+          if user_rating && user_rating > 0 do
+            # Weight user rating 60%, auto-adjust 40%
+            (user_rating * 0.6 + (5 + auto_adjust) * 0.4) / 10 * 10
+          else
+            exercise.comfort_level + auto_adjust
+          end
+
+        # Clamp to 1-10
+        final_comfort = max(1.0, min(10.0, final_comfort))
+
+        attrs = %{
+          comfort_level: final_comfort,
+          last_performed_at: DateTime.utc_now(),
+          times_performed: (exercise.times_performed || 0) + 1
+        }
+
+        exercise
+        |> Ecto.Changeset.cast(attrs, [:comfort_level, :last_performed_at, :times_performed])
+        |> Repo.update()
+    end
+  end
+
   def to_response(exercise) do
     %{
       "id" => to_string(exercise.id),
       "name" => exercise.name,
       "equipment_type" => exercise.equipment_type,
       "notes" => exercise.notes,
-      "last_used_at" => DateTime.to_iso8601(exercise.last_used_at)
+      "comfort_level" => exercise.comfort_level || 5.0,
+      "last_used_at" => DateTime.to_iso8601(exercise.last_used_at),
+      "times_performed" => exercise.times_performed || 0
     }
   end
 end
