@@ -67,6 +67,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Log set and update comfort level"
     },
     %{
+      subject: "fitness.cardio.log",
+      type: :request_reply,
+      description: "Log cardio session and track streak"
+    },
+    %{
       subject: "events.llm.response.parsed",
       type: :subscribe,
       description: "LLM response parsed"
@@ -262,6 +267,17 @@ defmodule BotArmyFitness.NATS.Consumer do
 
           {:error, reason} ->
             Logger.warning("[SetLoggerHandler] Failed to reply: #{inspect(reason)}")
+        end
+
+      "fitness.cardio.log" ->
+        response = BotArmyFitness.Handlers.CardioHandler.handle_log_cardio(message)
+
+        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+          {:ok, conn} ->
+            Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
+
+          {:error, reason} ->
+            Logger.warning("[CardioHandler] Failed to reply: #{inspect(reason)}")
         end
 
       "llm.response.parsed" ->
