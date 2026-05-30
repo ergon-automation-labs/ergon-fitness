@@ -94,21 +94,17 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
   end
 
   defp load_strength_context(tenant_id) do
-    case PersonalExerciseStore.list_all(tenant_id) do
-      {:ok, exercises} ->
-        Enum.map(exercises, fn ex ->
-          %{
-            "name" => ex["name"],
-            "comfort" => ex["comfort_level"] || 5.0,
-            "times_performed" => ex["times_performed"] || 0,
-            "equipment" => ex["equipment_type"],
-            "notes" => ex["notes"]
-          }
-        end)
+    exercises = PersonalExerciseStore.list_all(tenant_id)
 
-      {:error, _} ->
-        []
-    end
+    Enum.map(exercises, fn ex ->
+      %{
+        "name" => ex.name,
+        "comfort" => ex.comfort_level || 5.0,
+        "times_performed" => ex.times_performed || 0,
+        "equipment" => ex.equipment_type,
+        "notes" => ex.notes
+      }
+    end)
   end
 
   defp load_cardio_context(tenant_id) do
