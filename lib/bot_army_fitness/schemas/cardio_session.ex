@@ -1,4 +1,6 @@
 defmodule BotArmyFitness.Schemas.CardioSession do
+  @moduledoc "Cardio session data model for running, walking, cycling, and other cardio activities."
+
   use Ecto.Schema
 
   schema "cardio_sessions" do

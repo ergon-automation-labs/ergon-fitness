@@ -1,4 +1,6 @@
 defmodule BotArmyFitness.Schemas.DailyPlan do
+  @moduledoc "Daily fitness plan schema with exercises, quotes, and motivational content."
+
   use Ecto.Schema
 
   schema "daily_plans" do

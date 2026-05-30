@@ -1,4 +1,6 @@
 defmodule BotArmyFitness.CardioSessionStore do
+  @moduledoc "Logs cardio sessions and calculates comfort/streak based on pace and consistency."
+
   require Logger
   import Ecto.Query
   alias BotArmyFitness.Repo
