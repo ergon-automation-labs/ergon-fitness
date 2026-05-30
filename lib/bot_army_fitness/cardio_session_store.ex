@@ -130,6 +130,24 @@ defmodule BotArmyFitness.CardioSessionStore do
     end
   end
 
+  def list_recent(tenant_id, days) do
+    cutoff = Date.add(Date.utc_today(), -days)
+
+    try do
+      sessions =
+        Repo.all(
+          from(cs in CardioSession,
+            where: cs.tenant_id == ^tenant_id and cs.session_date > ^cutoff,
+            order_by: [desc: :session_date]
+          )
+        )
+
+      {:ok, Enum.map(sessions, &to_response/1)}
+    rescue
+      _ -> {:error, :query_failed}
+    end
+  end
+
   def to_response(session) do
     %{
       "id" => to_string(session.id),

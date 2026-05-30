@@ -33,7 +33,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
           "source_domain" => "fitness",
           "goal_id" => goal_id,
           "plan_request_id" => plan_request_id,
-          "model" => "quality",
+          "model" => "auto",
           "tenant_id" => tenant_id,
           "user_id" => user_id
         }
@@ -55,6 +55,8 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
 
     with "fitness" <- payload["source_domain"],
          "workout_plan" <- payload["type"] do
+      structured = payload["structured_data"] || %{}
+
       event_data = %{
         "event" => "fitness.workout.plan.ready",
         "event_id" => UUID.uuid4(),
@@ -68,24 +70,27 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
         "payload" => %{
           "goal_id" => payload["goal_id"],
           "plan_request_id" => payload["plan_request_id"],
-          "plan" => get_in(payload, ["result", "plan"]),
-          "weekly_sessions" => get_in(payload, ["result", "weekly_sessions"]),
-          "notes" => get_in(payload, ["result", "notes"])
+          "plan" => structured["plan"],
+          "weekly_sessions" => structured["weekly_sessions"],
+          "notes" => structured["notes"]
         }
       }
+
       BotArmyFitness.NATS.Publisher.publish(event_data)
     else
-      _ -> :ok  # not for us
+      # not for us
+      _ -> :ok
     end
   end
 
   # Private functions
 
   defp build_plan_prompt(goal, recent_workout_count) do
-    days_remaining = case Date.from_iso8601(to_string(goal["target_date"])) do
-      {:ok, target_date} -> Date.diff(target_date, Date.utc_today())
-      _ -> nil
-    end
+    days_remaining =
+      case Date.from_iso8601(to_string(goal["target_date"])) do
+        {:ok, target_date} -> Date.diff(target_date, Date.utc_today())
+        _ -> nil
+      end
 
     """
     You are a certified personal trainer. Generate a structured weekly workout plan.
@@ -103,6 +108,9 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
     """
   end
 
-  defp goal_store, do: Application.get_env(:bot_army_fitness, :goal_store, BotArmyFitness.GoalStore)
-  defp workout_store, do: Application.get_env(:bot_army_fitness, :workout_store, BotArmyFitness.WorkoutStore)
+  defp goal_store,
+    do: Application.get_env(:bot_army_fitness, :goal_store, BotArmyFitness.GoalStore)
+
+  defp workout_store,
+    do: Application.get_env(:bot_army_fitness, :workout_store, BotArmyFitness.WorkoutStore)
 end

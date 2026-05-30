@@ -72,6 +72,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Log cardio session and track streak"
     },
     %{
+      subject: "fitness.workout.plan.generate",
+      type: :subscribe,
+      description: "Generate today's workout plan via LLM"
+    },
+    %{
       subject: "events.llm.response.parsed",
       type: :subscribe,
       description: "LLM response parsed"
@@ -280,8 +285,22 @@ defmodule BotArmyFitness.NATS.Consumer do
             Logger.warning("[CardioHandler] Failed to reply: #{inspect(reason)}")
         end
 
+      "fitness.workout.plan.generate" ->
+        BotArmyFitness.Handlers.DailyPlanGeneratorHandler.handle_generate(message)
+
       "llm.response.parsed" ->
-        BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
+        payload = message["payload"] || %{}
+
+        case payload["type"] do
+          "daily_plan" ->
+            BotArmyFitness.Handlers.DailyPlanGeneratorHandler.handle_llm_response(payload)
+
+          "workout_plan" ->
+            BotArmyFitness.Handlers.WorkoutPlanHandler.handle_llm_response(message)
+
+          _ ->
+            :ok
+        end
 
       "discord.check_in.response" ->
         handle_check_in_response(message)

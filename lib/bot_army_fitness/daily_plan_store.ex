@@ -1,5 +1,6 @@
 defmodule BotArmyFitness.DailyPlanStore do
   require Logger
+  import Ecto.Query
   alias BotArmyFitness.Repo
   alias BotArmyFitness.Schemas.DailyPlan
 
@@ -67,6 +68,14 @@ defmodule BotArmyFitness.DailyPlanStore do
         Logger.error("[DailyPlanStore] Error storing plan: #{inspect(changeset.errors)}")
         {:error, changeset}
     end
+  end
+
+  def get_recent_plans(tenant_id, limit) do
+    DailyPlan
+    |> where([p], p.tenant_id == ^tenant_id)
+    |> order_by([p], desc: p.date)
+    |> limit(^limit)
+    |> Repo.all()
   end
 
   def to_response(plan) do
