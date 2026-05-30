@@ -1,6 +1,8 @@
 defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
+  @moduledoc "Generates daily fitness plans via LLM using workout history and comfort data."
+
   require Logger
-  alias BotArmyFitness.{DailyPlanStore, PersonalExerciseStore, CardioSessionStore}
+  alias BotArmyFitness.{CardioSessionStore, DailyPlanStore, PersonalExerciseStore}
   alias BotArmyRuntime.NATS.Publisher
 
   def handle_generate(message) do
@@ -140,18 +142,14 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
 
   defp build_prompt(workout_type, strength_context, cardio_context) do
     strength_list =
-      strength_context
-      |> Enum.map(fn ex ->
+      Enum.map_join(strength_context, "\n", fn ex ->
         "- #{ex["name"]}: comfort #{ex["comfort"]}/10 (done #{ex["times_performed"]}×), equipment: #{ex["equipment"]}"
       end)
-      |> Enum.join("\n")
 
     cardio_list =
-      cardio_context
-      |> Enum.map(fn c ->
+      Enum.map_join(cardio_context, "\n", fn c ->
         "- #{c["activity"]}: avg comfort #{c["avg_comfort"]}/10, streak #{c["streak_days"]} days, avg pace #{c["avg_pace"]} min/mi"
       end)
-      |> Enum.join("\n")
 
     """
     You are a personal fitness coach. Generate a daily workout plan.
@@ -189,7 +187,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
     """
   end
 
-  defp write_plan_to_para(tenant_id, plan_data) do
+  defp write_plan_to_para(_tenant_id, plan_data) do
     date_str = Date.to_string(Date.utc_today())
     content = format_plan_markdown(plan_data, date_str)
 
@@ -217,15 +215,13 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
     exercises = plan_data["exercises"] || []
 
     exercise_rows =
-      exercises
-      |> Enum.map(fn ex ->
+      Enum.map_join(exercises, "\n", fn ex ->
         sets = ex["sets"] || "?"
         reps = ex["reps"] || "?"
         rest = ex["rest_seconds"] || "?"
         ex_notes = ex["notes"] || ""
         "| #{ex["name"]} | #{sets} | #{reps} | #{rest}s | #{ex_notes} |"
       end)
-      |> Enum.join("\n")
 
     """
     # Morning Workout — #{date_str}
