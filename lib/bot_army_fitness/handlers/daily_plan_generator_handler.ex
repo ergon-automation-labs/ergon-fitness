@@ -66,6 +66,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
         case DailyPlanStore.create_plan(tenant_id, plan) do
           {:ok, _} ->
             Logger.info("[DailyPlanGenerator] Stored daily plan: #{type}")
+            write_plan_to_para(tenant_id, plan_data)
 
           {:error, reason} ->
             Logger.warning("[DailyPlanGenerator] Failed to store plan: #{inspect(reason)}")
@@ -185,6 +186,64 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
       ],
       "notes": "<summary or coaching notes>"
     }
+    """
+  end
+
+  defp write_plan_to_para(tenant_id, plan_data) do
+    date_str = Date.to_string(Date.utc_today())
+    content = format_plan_markdown(plan_data, date_str)
+
+    payload = %{
+      "schema_version" => "1.0",
+      "relative_path" => "resources/fitness/plans/#{date_str}.md",
+      "content" => content,
+      "mode" => "write"
+    }
+
+    case Publisher.publish("para.fs.write", payload) do
+      {:ok, _} ->
+        Logger.info("[DailyPlanGenerator] PARA plan exported: #{date_str}")
+
+      {:error, reason} ->
+        Logger.warning("[DailyPlanGenerator] PARA export failed: #{inspect(reason)}")
+    end
+  end
+
+  defp format_plan_markdown(plan_data, date_str) do
+    type = plan_data["type"] || "workout"
+    est_minutes = plan_data["estimated_minutes"] || 45
+    quote_ = plan_data["motivational_quote"] || ""
+    notes = plan_data["notes"] || ""
+    exercises = plan_data["exercises"] || []
+
+    exercise_rows =
+      exercises
+      |> Enum.map(fn ex ->
+        sets = ex["sets"] || "?"
+        reps = ex["reps"] || "?"
+        rest = ex["rest_seconds"] || "?"
+        ex_notes = ex["notes"] || ""
+        "| #{ex["name"]} | #{sets} | #{reps} | #{rest}s | #{ex_notes} |"
+      end)
+      |> Enum.join("\n")
+
+    """
+    # Morning Workout — #{date_str}
+
+    **Type:** #{type}
+    **Estimated duration:** #{est_minutes} min
+
+    > #{quote_}
+
+    ## Exercises
+
+    | Exercise | Sets | Reps | Rest | Notes |
+    |----------|------|------|------|-------|
+    #{exercise_rows}
+
+    ## Notes
+
+    #{notes}
     """
   end
 end
