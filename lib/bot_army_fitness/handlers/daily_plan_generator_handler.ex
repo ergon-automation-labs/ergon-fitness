@@ -69,6 +69,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
           {:ok, _} ->
             Logger.info("[DailyPlanGenerator] Stored daily plan: #{type}")
             write_plan_to_para(tenant_id, plan_data)
+            create_gtd_task(tenant_id, plan_data)
 
           {:error, reason} ->
             Logger.warning("[DailyPlanGenerator] Failed to store plan: #{inspect(reason)}")
@@ -241,5 +242,37 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
 
     #{notes}
     """
+  end
+
+  defp create_gtd_task(tenant_id, plan_data) do
+    date_str = Date.to_string(Date.utc_today())
+    type = plan_data["type"] || "workout"
+    minutes = plan_data["estimated_minutes"] || 45
+
+    envelope = %{
+      "event" => "gtd.task.create",
+      "event_id" => UUID.uuid4(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_fitness",
+      "source_node" => node() |> Atom.to_string(),
+      "triggered_by" => "fitness.scheduler",
+      "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => "00000000-0000-0000-0000-000000000002",
+      "payload" => %{
+        "title" => "Morning workout — #{date_str} (#{type}, #{minutes}min)",
+        "context" => "next",
+        "priority" => "normal",
+        "labels" => ["fitness"]
+      }
+    }
+
+    case Publisher.request("gtd.task.create", envelope, timeout_ms: 5_000) do
+      {:ok, %{"data" => %{"task_id" => task_id}}} ->
+        Logger.info("[DailyPlanGenerator] GTD task created: #{task_id}")
+
+      {:error, reason} ->
+        Logger.warning("[DailyPlanGenerator] GTD task creation failed: #{inspect(reason)}")
+    end
   end
 end
