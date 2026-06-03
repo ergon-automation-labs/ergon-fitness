@@ -58,14 +58,29 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
               user_id
             )
 
+            # Fire-and-forget context signal for context broker
+            try do
+              BotArmyRuntime.NATS.Publisher.publish("context.signal.fitness", %{
+                "type" => "workout_completed",
+                "duration_minutes" => Map.get(payload, "duration_minutes"),
+                "workout_type" => payload["workout_type"]
+              })
+            rescue
+              _ -> :ok
+            end
+
+            :ok
+
           {:error, reason} ->
             Logger.warning("Failed to persist workout: #{inspect(reason)}")
             publish_error(event_id, reason, "Failed to persist workout", tenant_id, user_id)
+            :ok
         end
 
       {:error, reason} ->
         Logger.warning("Invalid workout payload: #{inspect(reason)}")
         publish_error(event_id, reason, "Invalid workout data", tenant_id, user_id)
+        :ok
     end
   end
 
