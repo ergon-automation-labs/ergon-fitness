@@ -158,7 +158,9 @@ defmodule BotArmyFitness.NATS.Consumer do
     BotArmyRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
       Logger.debug("Received NATS message on subject: #{msg.topic}")
 
-      case BotArmyCore.NATS.Decoder.decode(msg.body) do
+      is_request_reply = request_reply_subject?(msg.topic)
+
+      case decode_message(msg.body, msg.topic, is_request_reply) do
         {:ok, decoded_message} ->
           route_message(decoded_message, msg)
 
@@ -310,6 +312,24 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       _ ->
         Logger.debug("Unknown Fitness event type: #{event}")
+    end
+  end
+
+  defp request_reply_subject?(subject) do
+    Enum.any?(@subjects, fn %{subject: s, type: t} -> s == subject and t == :request_reply end)
+  end
+
+  defp decode_message(body, _subject, false) do
+    BotArmyCore.NATS.Decoder.decode(body)
+  end
+
+  defp decode_message(body, subject, true) do
+    case Jason.decode(body) do
+      {:ok, payload} ->
+        {:ok, Map.merge(payload, %{"event" => subject})}
+
+      {:error, _reason} ->
+        {:ok, %{"event" => subject}}
     end
   end
 
