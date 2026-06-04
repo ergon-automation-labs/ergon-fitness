@@ -326,9 +326,15 @@ defmodule BotArmyFitness.NATS.Consumer do
   defp decode_message(body, subject, true) do
     case Jason.decode(body) do
       {:ok, payload} ->
-        {:ok, Map.merge(payload, %{"event" => subject})}
+        decoded = Map.merge(payload, %{"event" => subject})
+        Logger.debug("[Consumer] Decoded request-reply from #{subject}: #{inspect(decoded)}")
+        {:ok, decoded}
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        Logger.debug(
+          "[Consumer] JSON decode failed for #{subject}: #{inspect(reason)}, using empty payload"
+        )
+
         {:ok, %{"event" => subject}}
     end
   end
