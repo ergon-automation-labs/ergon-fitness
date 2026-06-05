@@ -216,14 +216,12 @@ defmodule BotArmyFitness.NATS.Consumer do
   end
 
   defp register_with_retry(bot, subjects, version, status, attempts) do
-    try do
-      BotArmyRuntime.Registry.register(bot, subjects, version, status)
-      :ok
-    rescue
-      _e ->
-        Process.sleep(100 * (attempts + 1))
-        register_with_retry(bot, subjects, version, status, attempts + 1)
-    end
+    BotArmyRuntime.Registry.register(bot, subjects, version, status)
+    :ok
+  rescue
+    _e ->
+      Process.sleep(100 * (attempts + 1))
+      register_with_retry(bot, subjects, version, status, attempts + 1)
   end
 
   # Private functions
