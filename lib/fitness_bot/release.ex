@@ -15,7 +15,7 @@ defmodule FitnessBot.Release do
 
   def migrate do
     MigrationRunner.run(
-      repo_module: FitnessBot.Repo,
+      repo_module: BotArmyFitness.Repo,
       app_module: @app
     )
   end
