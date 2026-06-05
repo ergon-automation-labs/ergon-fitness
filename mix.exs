@@ -10,7 +10,7 @@ defmodule BotArmyFitness.MixProject do
       deps: deps(),
       releases: [
         fitness_bot: [
-          applications: [bot_army_library_runtime: :permanent, bot_army_fitness: :permanent]
+          applications: [bot_army_fitness: :permanent]
         ]
       ]
     ]
@@ -26,7 +26,8 @@ defmodule BotArmyFitness.MixProject do
   defp deps do
     [
       {:bot_army_library_core, path: "../bot_army_library_core"},
-      {:bot_army_library_runtime, path: "../bot_army_library_runtime"},
+      {:bot_army_library_runtime,
+       git: "git@github.com:ergon-automation-labs/ergon-library-runtime.git", branch: "main"},
       {:bot_army_library_learning, path: "../bot_army_library_learning"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},

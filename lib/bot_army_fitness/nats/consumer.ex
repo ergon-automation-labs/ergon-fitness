@@ -134,9 +134,16 @@ defmodule BotArmyFitness.NATS.Consumer do
         deployment_status =
           Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
 
-        Registry.register("fitness", @subjects, @version, deployment_status)
-        Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
-        {:noreply, %{state | conn: conn}}
+        case register_with_retry("fitness", @subjects, @version, deployment_status, 0) do
+          :ok ->
+            Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
+            {:noreply, %{state | conn: conn}}
+
+          :error ->
+            Logger.warning("Could not register with registry, retrying in 1s")
+            Process.send_after(self(), :retry_subscribe, 1_000)
+            {:noreply, state}
+        end
 
       {:error, reason} ->
         Logger.warning(
@@ -197,11 +204,26 @@ defmodule BotArmyFitness.NATS.Consumer do
       deployment_status =
         Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
 
-      Registry.register("fitness", @subjects, @version, deployment_status)
+      register_with_retry("fitness", @subjects, @version, deployment_status, 0)
       Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
     end
 
     {:noreply, state}
+  end
+
+  defp register_with_retry(_bot, _subjects, _version, _status, attempts) when attempts > 3 do
+    :error
+  end
+
+  defp register_with_retry(bot, subjects, version, status, attempts) do
+    try do
+      BotArmyRuntime.Registry.register(bot, subjects, version, status)
+      :ok
+    rescue
+      _e ->
+        Process.sleep(100 * (attempts + 1))
+        register_with_retry(bot, subjects, version, status, attempts + 1)
+    end
   end
 
   # Private functions
