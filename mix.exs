@@ -26,8 +26,7 @@ defmodule BotArmyFitness.MixProject do
   defp deps do
     [
       {:bot_army_library_core, path: "../bot_army_library_core"},
-      {:bot_army_library_runtime,
-       git: "git@github.com:ergon-automation-labs/ergon-library-runtime.git", branch: "main"},
+      {:bot_army_library_runtime, path: "../bot_army_library_runtime", override: true},
       {:bot_army_library_learning, path: "../bot_army_library_learning"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
