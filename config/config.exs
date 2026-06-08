@@ -1,5 +1,15 @@
 import Config
 
+# Logger with correlation_id support
+config :logger,
+  level: :info,
+  backends: [:console],
+  default_formatter: {BotArmyRuntime.LoggerFormatter, []}
+
+config :logger, :console,
+  format: {BotArmyRuntime.LoggerFormatter, []},
+  metadata: [:correlation_id]
+
 config :bot_army_fitness, :deployment_status, "experimental"
 
 # Load .env file for local development/testing
@@ -39,3 +49,4 @@ config :bot_army_fitness, BotArmyFitness.Repo,
 if File.exists?("config/#{Mix.env()}.exs") do
   import_config "#{Mix.env()}.exs"
 end
+
