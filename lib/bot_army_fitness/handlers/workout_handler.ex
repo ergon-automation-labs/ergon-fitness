@@ -37,6 +37,15 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
           {:ok, workout} ->
             Logger.info("Workout logged: event_id=#{event_id}, workout_id=#{workout["id"]}")
 
+            BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_logged", 1,
+              metadata: %{
+                workout_id: workout["id"],
+                workout_type: payload["workout_type"],
+                duration_minutes: payload["duration_minutes"],
+                tenant_id: tenant_id
+              }
+            )
+
             # Record outcome: workout was completed
             try do
               BotArmyLearning.OutcomeTracker.record(
@@ -73,12 +82,29 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
           {:error, reason} ->
             Logger.warning("Failed to persist workout: #{inspect(reason)}")
+
+            BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_log_failed", 0,
+              metadata: %{
+                workout_type: payload["workout_type"],
+                reason: inspect(reason),
+                tenant_id: tenant_id
+              }
+            )
+
             publish_error(event_id, reason, "Failed to persist workout", tenant_id, user_id)
             :ok
         end
 
       {:error, reason} ->
         Logger.warning("Invalid workout payload: #{inspect(reason)}")
+
+        BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_log_invalid", 0,
+          metadata: %{
+            reason: inspect(reason),
+            tenant_id: tenant_id
+          }
+        )
+
         publish_error(event_id, reason, "Invalid workout data", tenant_id, user_id)
         :ok
     end
