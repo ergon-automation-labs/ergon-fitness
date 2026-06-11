@@ -33,6 +33,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   @subjects [
     %{subject: "fitness.workout.log", type: :subscribe, description: "Log workout"},
+    %{subject: "fitness.workout.list", type: :request_reply, description: "List recent workouts"},
     %{subject: "fitness.goal.set", type: :subscribe, description: "Set fitness goal"},
     %{subject: "fitness.goal.update", type: :subscribe, description: "Update fitness goal"},
     %{subject: "fitness.goal.progress", type: :subscribe, description: "Report goal progress"},
@@ -235,6 +236,9 @@ defmodule BotArmyFitness.NATS.Consumer do
     case event do
       "fitness.workout.log" ->
         BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+
+      "fitness.workout.list" ->
+        BotArmyFitness.Handlers.WorkoutHandler.handle_list(message, nats_msg.reply_to)
 
       "fitness.goal.set" ->
         BotArmyFitness.Handlers.GoalHandler.handle_set(message)

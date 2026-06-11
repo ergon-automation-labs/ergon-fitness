@@ -4,11 +4,45 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
   This module processes incoming workout messages:
   - `fitness.workout.log` - Log a completed workout
+  - `fitness.workout.list` - List recent workouts
 
   Each operation validates the input and publishes response events.
   """
 
   require Logger
+
+  @doc """
+  Handle workout list request.
+
+  Returns a list of recent workouts for the user.
+  """
+  def handle_list(message, reply_to) when is_binary(reply_to) and reply_to != "" do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
+    limit = Map.get(payload, "limit", 10)
+    days = Map.get(payload, "days", 30)
+
+    workouts = workout_store().list(tenant_id)
+
+    filtered_workouts =
+      workouts
+      |> Enum.filter(fn w ->
+        # Filter by user
+        w["user_id"] == user_id
+      end)
+      |> Enum.sort_by(fn w -> w["date"] || "" end, :desc)
+      |> Enum.take(limit)
+
+    response = %{
+      "workouts" => filtered_workouts,
+      "count" => length(filtered_workouts),
+      "limit" => limit
+    }
+
+    reply(reply_to, response)
+  end
+
+  def handle_list(_message, _reply_to), do: :ok
 
   @doc """
   Handle workout logging event.
@@ -178,6 +212,16 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
     case BotArmyFitness.NATS.Publisher.publish(error_event) do
       :ok -> Logger.debug("Published error event")
       {:error, err} -> Logger.error("Failed to publish error: #{inspect(err)}")
+    end
+  end
+
+  defp reply(reply_to, payload) do
+    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+      {:ok, conn} ->
+        Gnat.pub(conn, reply_to, Jason.encode!(payload))
+
+      {:error, reason} ->
+        Logger.warning("[WorkoutHandler] Failed to reply: #{inspect(reason)}")
     end
   end
 
