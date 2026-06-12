@@ -267,7 +267,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
       }
     }
 
-    case Publisher.request("gtd.task.create", envelope, timeout_ms: 5_000) do
+    case BotArmyFitness.GTDClient.request("gtd.task.create", envelope, timeout_ms: 5_000) do
       {:ok, %{"data" => %{"task_id" => task_id}}} ->
         Logger.info("[DailyPlanGenerator] GTD task created: #{task_id}")
 
