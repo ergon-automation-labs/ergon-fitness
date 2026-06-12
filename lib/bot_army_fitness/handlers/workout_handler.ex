@@ -103,7 +103,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
             # Fire-and-forget context signal for context broker
             try do
-              BotArmyRuntime.NATS.Publisher.publish("context.signal.fitness", %{
+              BotArmyCore.IntegrationGates.context_publish("context.signal.fitness", %{
                 "type" => "workout_completed",
                 "duration_minutes" => Map.get(payload, "duration_minutes"),
                 "workout_type" => payload["workout_type"]

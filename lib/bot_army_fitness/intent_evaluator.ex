@@ -194,7 +194,7 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   @doc false
   def handle_suggest_workout_action(bot_name, action, _intent_id, details, _endorsements) do
-    BotArmyRuntime.NATS.Publisher.publish("notification.route.request", %{
+    BotArmyCore.IntegrationGates.notification_publish("notification.route.request", %{
       "event_id" => UUID.uuid4(),
       "triggered_by" => bot_name,
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
@@ -289,7 +289,7 @@ defmodule BotArmyFitness.IntentEvaluator do
       end
 
     if message do
-      BotArmyRuntime.NATS.Publisher.publish("notification.route.request", %{
+      BotArmyCore.IntegrationGates.notification_publish("notification.route.request", %{
         "event_id" => UUID.uuid4(),
         "triggered_by" => bot_name,
         "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
