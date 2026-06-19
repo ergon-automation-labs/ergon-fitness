@@ -456,7 +456,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       goal_id = payload["goal_id"]
       tenant_id = message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id()
 
-      goal = BotArmyFitness.GoalStore.get(tenant_id, goal_id)
+      goal = goal_id && BotArmyFitness.GoalStore.get(tenant_id, goal_id)
 
       response =
         case goal do
