@@ -20,6 +20,7 @@ defmodule BotArmyFitness.Application do
       |> maybe_add_workout_store()
       |> maybe_add_goal_store()
       |> maybe_add_goal_scheduler()
+      |> maybe_add_reminder_scheduler()
       |> maybe_add_pulse_publisher()
       |> maybe_add_tavern_memory()
       |> maybe_add_intent_evaluator()
@@ -45,6 +46,31 @@ defmodule BotArmyFitness.Application do
 
   defp maybe_add_goal_scheduler(children) do
     if @env == :test, do: children, else: [{BotArmyFitness.GoalScheduler, []} | children]
+  end
+
+  defp maybe_add_reminder_scheduler(children) do
+    if @env == :test do
+      children
+    else
+      reminder_config =
+        BotArmyReminderScheduler.Scheduler.child_spec(
+          bot_name: "fitness",
+          check_interval_minutes: 60,
+          reminders: [
+            %{
+              thing_type: "workout",
+              check_fn: &BotArmyFitness.Scheduler.check_workouts_needed/0,
+              urgency_tiers: [
+                {1, "due"},
+                {3, "overdue"},
+                {7, "urgent"}
+              ]
+            }
+          ]
+        )
+
+      [reminder_config | children]
+    end
   end
 
   defp maybe_add_pulse_publisher(children) do

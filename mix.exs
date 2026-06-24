@@ -28,6 +28,7 @@ defmodule BotArmyFitness.MixProject do
       {:bot_army_library_core, path: "../bot_army_library_core"},
       {:bot_army_library_runtime, path: "../bot_army_library_runtime", override: true},
       {:bot_army_library_learning, path: "../bot_army_library_learning"},
+      {:bot_army_reminder_scheduler, path: "../bot_army_library_reminder_scheduler"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
       {:jason, "~> 1.4"},
