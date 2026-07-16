@@ -1,7 +1,7 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 MIX ?= /Users/abby/.local/share/mise/shims/mix
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs push-and-publish
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs push-and-publish sync-release-version
 
 help:
 	@echo "BotArmyFitness - Fitness Bot"
@@ -124,15 +124,16 @@ test-release-smoke:
 # Used as a gate in publish-release to require integration tests.
 HAS_RESPONDER_CHANGES := $(shell git diff --name-only origin/main 2>/dev/null | grep -qE 'lib/.*/(responders|nats|consumers)/|lib/.*/bridge.*\.ex|lib/.*/event.*\.ex' && echo 1 || echo 0)
 
-publish-release: release
-	@if [ "$(HAS_RESPONDER_CHANGES)" = "1" ] && [ "$(SKIP_INTEGRATION_GATE)" != "1" ]; then \
-		echo "🔒 Responder/NATS/bridge changes detected. Integration tests required before publish."; \
-		$(MAKE) test-integration || { echo "❌ Integration tests failed. Publish blocked."; exit 1; }; \
-		echo "✅ Integration tests passed."; \
-	else \
-		[ "$(HAS_RESPONDER_CHANGES)" = "1" ] && echo "⚠️  Skipping integration gate (SKIP_INTEGRATION_GATE=1)"; \
-	fi
-	@$(MAKE) test-release-smoke
+sync-release-version:
+	@VERSION=$$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' mix.exs | head -n 1); \
+	if [ -z "$$VERSION" ]; then \
+		echo "❌ Failed to resolve version from mix.exs"; exit 1; \
+	fi; \
+	TIMESTAMP=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	echo "$$VERSION" > .release-published; \
+	echo "✅ Synced release version: v$$VERSION ($$TIMESTAMP)"
+
+publish-release:
 	@set -e; \
 	VERSION=$$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' mix.exs | head -n 1); \
 	if [ -z "$$VERSION" ]; then \
@@ -141,9 +142,24 @@ publish-release: release
 	fi; \
 	TARBALL=fitness_bot-$$VERSION.tar.gz; \
 	echo "Version: $$VERSION"; \
-	echo "Creating release tarball..."; \
-	tar -czf "$$TARBALL" -C _build/prod/rel fitness_bot/; \
-	echo "✓ Tarball created: $$TARBALL"; \
+	echo ""; \
+	if [ -f "$$TARBALL" ]; then \
+		echo "✓ Tarball already exists locally: $$TARBALL (skipping rebuild)"; \
+	else \
+		echo "📦 Building release (tarball not found locally)..."; \
+		if [ "$(HAS_RESPONDER_CHANGES)" = "1" ] && [ "$(SKIP_INTEGRATION_GATE)" != "1" ]; then \
+			echo "🔒 Responder/NATS/bridge changes detected. Integration tests required before publish."; \
+			$(MAKE) test-integration || { echo "❌ Integration tests failed. Publish blocked."; exit 1; }; \
+			echo "✅ Integration tests passed."; \
+		else \
+			[ "$(HAS_RESPONDER_CHANGES)" = "1" ] && echo "⚠️  Skipping integration gate (SKIP_INTEGRATION_GATE=1)" || true; \
+		fi; \
+		$(MAKE) release; \
+		$(MAKE) test-release-smoke; \
+		echo "Creating release tarball..."; \
+		tar -czf "$$TARBALL" -C _build/prod/rel fitness_bot/; \
+		echo "✓ Tarball created: $$TARBALL"; \
+	fi; \
 	echo ""; \
 	echo "Creating GitHub release v$$VERSION..."; \
 	if gh release view "v$$VERSION" >/dev/null 2>&1; then \
@@ -151,7 +167,7 @@ publish-release: release
 	else \
 		gh release create "v$$VERSION" "$$TARBALL" \
 			--title "Release v$$VERSION" \
-			--notes "Fitness Bot Elixir release v$$VERSION. Download and deploy with Jenkins." \
+			--notes "Fitness Bot Elixir release v$$VERSION" \
 			--draft=false; \
 	fi; \
 	echo "✓ Release published to GitHub"; \
