@@ -44,7 +44,7 @@ defmodule BotArmyFitness.GoalScheduler do
   end
 
   defp check_goals_nearing_deadline do
-    goals = BotArmyFitness.GoalStore.list(BotArmyCore.Tenant.default_tenant_id())
+    goals = BotArmyFitness.GoalStore.list(BotArmyLibraryCore.Tenant.default_tenant_id())
 
     Enum.each(goals, fn goal ->
       if should_remind_goal(goal) do

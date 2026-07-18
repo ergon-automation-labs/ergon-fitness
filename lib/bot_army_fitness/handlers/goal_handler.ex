@@ -17,7 +17,7 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
   Validates the goal data and publishes a goal.set event.
   """
   def handle_set(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -58,7 +58,7 @@ defmodule BotArmyFitness.Handlers.GoalHandler do
   Validates the update data and publishes a goal.updated event.
   """
   def handle_update(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 

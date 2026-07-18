@@ -19,7 +19,7 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
   or `{"error": "..."}`.
   """
   def handle_chat(message, reply_to) when is_binary(reply_to) and reply_to != "" do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     user_message = payload["message"] || ""
     session_id = payload["session_id"] || UUID.uuid4()
@@ -52,7 +52,7 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
       "timeout_ms" => @llm_request_timeout_ms
     }
 
-    case BotArmyRuntime.NATS.Publisher.request(
+    case BotArmyLibraryRuntime.NATS.Publisher.request(
            "llm.prompt.submit",
            llm_payload,
            timeout_ms: @llm_request_timeout_ms
@@ -83,7 +83,7 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
       "bot_id" => "fitness_bot"
     }
 
-    case BotArmyRuntime.NATS.Publisher.request(
+    case BotArmyLibraryRuntime.NATS.Publisher.request(
            "rpg.session.gather_context",
            payload,
            timeout_ms: @rpg_request_timeout_ms
@@ -207,7 +207,7 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
   end
 
   defp reply(reply_to, payload) do
-    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
       {:ok, conn} ->
         Gnat.pub(conn, reply_to, Jason.encode!(payload))
 

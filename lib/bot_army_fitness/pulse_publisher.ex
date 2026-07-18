@@ -74,7 +74,7 @@ defmodule BotArmyFitness.PulsePublisher do
     health_signal =
       if metrics.workouts > 0 or metrics.streak_days > 0, do: "nominal", else: "degraded"
 
-    BotArmyRuntime.SynapseHealth.publish(
+    BotArmyLibraryRuntime.SynapseHealth.publish(
       source: "bot_army_fitness",
       service: "fitness",
       health_signal: health_signal
@@ -102,7 +102,7 @@ defmodule BotArmyFitness.PulsePublisher do
 
     subject = "bot.fitness.pulse"
 
-    case BotArmyRuntime.NATS.Publisher.publish(subject, payload) do
+    case BotArmyLibraryRuntime.NATS.Publisher.publish(subject, payload) do
       {:ok, _} -> Logger.info("[PulsePublisher] Published fitness pulse")
       {:error, reason} -> Logger.warning("[PulsePublisher] Publish failed: #{inspect(reason)}")
     end
@@ -143,7 +143,7 @@ defmodule BotArmyFitness.PulsePublisher do
         "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
       }
 
-      case BotArmyRuntime.NATS.Publisher.publish("gossip.tavern.narrated", gossip) do
+      case BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.tavern.narrated", gossip) do
         {:ok, _} -> Logger.info("[PulsePublisher] Published tavern gossip")
         {:error, reason} -> Logger.warning("[PulsePublisher] Gossip failed: #{inspect(reason)}")
       end

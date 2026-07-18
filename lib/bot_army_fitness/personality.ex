@@ -10,7 +10,7 @@ defmodule BotArmyFitness.Personality do
   """
 
   require Logger
-  alias BotArmyRuntime.Personality.Identity
+  alias BotArmyLibraryRuntime.Personality.Identity
 
   @doc """
   System prompt for LLM-powered Fitness Bot responses.

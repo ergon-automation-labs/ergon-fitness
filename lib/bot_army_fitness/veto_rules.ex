@@ -1,7 +1,7 @@
 defmodule BotArmyFitness.VetoRules do
   @moduledoc false
 
-  alias BotArmyRuntime.Intent.AccumulatedContext
+  alias BotArmyLibraryRuntime.Intent.AccumulatedContext
 
   @doc """
   Veto GTD nudge intents when the user has no recent workout activity.

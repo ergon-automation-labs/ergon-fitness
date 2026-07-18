@@ -14,7 +14,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
   Retrieves goal details and initiates LLM plan generation.
   """
   def handle_plan_request(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     goal_id = payload["goal_id"]
 
@@ -38,7 +38,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
           "user_id" => user_id
         }
 
-        BotArmyRuntime.NATS.Publisher.publish("llm.response.parse", llm_request)
+        BotArmyLibraryRuntime.NATS.Publisher.publish("llm.response.parse", llm_request)
         Logger.info("LLM plan request sent: plan_request_id=#{plan_request_id}")
         :ok
     end
@@ -50,7 +50,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
   Processes completed plan and publishes fitness.workout.plan.ready event.
   """
   def handle_llm_response(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with "fitness" <- payload["source_domain"],

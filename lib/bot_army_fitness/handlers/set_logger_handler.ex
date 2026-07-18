@@ -3,7 +3,7 @@ defmodule BotArmyFitness.Handlers.SetLoggerHandler do
   alias BotArmyFitness.PersonalExerciseStore
 
   def handle_log_set(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with exercise_name <- payload["exercise_name"],

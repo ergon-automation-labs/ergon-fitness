@@ -5,11 +5,11 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   require Logger
 
-  alias BotArmyRuntime.Intent.AccumulatedContext
-  alias BotArmyRuntime.Intent.ActionHandler
-  alias BotArmyRuntime.Intent.DeferHandler
-  alias BotArmyRuntime.Intent.Publisher
-  alias BotArmyRuntime.Intent.ThresholdModel
+  alias BotArmyLibraryRuntime.Intent.AccumulatedContext
+  alias BotArmyLibraryRuntime.Intent.ActionHandler
+  alias BotArmyLibraryRuntime.Intent.DeferHandler
+  alias BotArmyLibraryRuntime.Intent.Publisher
+  alias BotArmyLibraryRuntime.Intent.ThresholdModel
 
   @bot_name "fitness"
   @evaluate_interval_ms 5 * 60 * 1000
@@ -194,7 +194,7 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   @doc false
   def handle_suggest_workout_action(bot_name, action, _intent_id, details, _endorsements) do
-    BotArmyCore.IntegrationGates.notification_publish("notification.route.request", %{
+    BotArmyLibraryCore.IntegrationGates.notification_publish("notification.route.request", %{
       "event_id" => UUID.uuid4(),
       "triggered_by" => bot_name,
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
@@ -217,7 +217,7 @@ defmodule BotArmyFitness.IntentEvaluator do
         "schema_version" => "1.0",
         "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
         "source" => "bot_army_fitness",
-        "tenant_id" => BotArmyRuntime.Tenant.default_tenant_id(),
+        "tenant_id" => BotArmyLibraryRuntime.Tenant.default_tenant_id(),
         "conversation_id" => UUID.uuid4(),
         "payload" => %{
           "from_bot" => bot_name,
@@ -229,7 +229,7 @@ defmodule BotArmyFitness.IntentEvaluator do
         }
       }
 
-      BotArmyRuntime.NATS.Publisher.publish("gossip.social.invite", message)
+      BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.social.invite", message)
       Logger.info("[Fitness.Intent] Proposed social check-in to gtd_bot (days=#{days})")
     end
   end
@@ -289,7 +289,7 @@ defmodule BotArmyFitness.IntentEvaluator do
       end
 
     if message do
-      BotArmyCore.IntegrationGates.notification_publish("notification.route.request", %{
+      BotArmyLibraryCore.IntegrationGates.notification_publish("notification.route.request", %{
         "event_id" => UUID.uuid4(),
         "triggered_by" => bot_name,
         "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),

@@ -99,7 +99,7 @@ defmodule BotArmyFitness.Application do
         ]
       ]
 
-      child = {BotArmyRuntime.Intent.VetoListener, rules: veto_rules, bot_name: "fitness"}
+      child = {BotArmyLibraryRuntime.Intent.VetoListener, rules: veto_rules, bot_name: "fitness"}
       [child | children]
     end
   end
@@ -112,7 +112,7 @@ defmodule BotArmyFitness.Application do
     if @env == :test,
       do: children,
       else: [
-        {BotArmyLearning.OutcomeTracker,
+        {BotArmyLibraryLearning.OutcomeTracker,
          [repo: BotArmyFitness.Repo, name: :fitness_outcome_tracker]}
         | children
       ]

@@ -6,7 +6,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   - `fitness.workout.*` - Workout-related events
   - `fitness.goal.*` - Fitness goal events
 
-  Messages are decoded using BotArmyCore.NATS.Decoder and routed to
+  Messages are decoded using BotArmyLibraryCore.NATS.Decoder and routed to
   appropriate handlers based on the event type.
 
   ## Features
@@ -25,7 +25,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   use GenServer
   require Logger
-  alias BotArmyRuntime.Registry
+  alias BotArmyLibraryRuntime.Registry
 
   @version Mix.Project.config()[:version]
   @registry_heartbeat_ms 20_000
@@ -122,9 +122,9 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   @impl true
   def handle_continue(:subscribe, state) do
-    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
       {:ok, conn} ->
-        BotArmyRuntime.NATS.Connection.subscribe_to_status()
+        BotArmyLibraryRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to fitness topics")
 
         Enum.each(@subjects, fn %{subject: subject} ->
@@ -148,7 +148,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       {:error, reason} ->
         next_attempt = state.reconnect_attempt + 1
-        delay = BotArmyRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
+        delay = BotArmyLibraryRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
 
         Logger.warning(
           "Failed to get NATS connection: #{inspect(reason)}, retrying in #{delay}ms (attempt #{next_attempt})"
@@ -166,7 +166,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   @impl true
   def handle_info({:msg, msg}, state) do
-    BotArmyRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
+    BotArmyLibraryRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
       Logger.debug("Received NATS message on subject: #{msg.topic}")
 
       is_request_reply = request_reply_subject?(msg.topic)
@@ -192,7 +192,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   @impl true
   def handle_info({:nats, :disconnected}, state) do
     next_attempt = state.reconnect_attempt + 1
-    delay = BotArmyRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
+    delay = BotArmyLibraryRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
 
     Logger.warning(
       "Disconnected from NATS, will reconnect in #{delay}ms (attempt #{next_attempt})"
@@ -226,7 +226,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   end
 
   defp register_with_retry(bot, subjects, version, status, attempts) do
-    BotArmyRuntime.Registry.register(bot, subjects, version, status)
+    BotArmyLibraryRuntime.Registry.register(bot, subjects, version, status)
     :ok
   rescue
     _e ->
@@ -267,7 +267,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       "fitness.workout.today" ->
         response = BotArmyFitness.Handlers.TodayPlanHandler.handle_request(message)
 
-        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
           {:ok, conn} ->
             Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
 
@@ -279,7 +279,7 @@ defmodule BotArmyFitness.NATS.Consumer do
         response =
           BotArmyFitness.Handlers.PersonalExercisesHandler.handle_list_by_equipment(message)
 
-        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
           {:ok, conn} ->
             Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
 
@@ -290,7 +290,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       "fitness.exercises.save" ->
         response = BotArmyFitness.Handlers.PersonalExercisesHandler.handle_save_exercise(message)
 
-        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
           {:ok, conn} ->
             Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
 
@@ -301,7 +301,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       "fitness.set.log" ->
         response = BotArmyFitness.Handlers.SetLoggerHandler.handle_log_set(message)
 
-        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
           {:ok, conn} ->
             Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
 
@@ -312,7 +312,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       "fitness.cardio.log" ->
         response = BotArmyFitness.Handlers.CardioHandler.handle_log_cardio(message)
 
-        case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+        case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
           {:ok, conn} ->
             Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
 
@@ -353,7 +353,7 @@ defmodule BotArmyFitness.NATS.Consumer do
   end
 
   defp decode_message(body, _subject, false) do
-    BotArmyCore.NATS.Decoder.decode(body)
+    BotArmyLibraryCore.NATS.Decoder.decode(body)
   end
 
   defp decode_message(body, subject, true) do
@@ -453,7 +453,7 @@ defmodule BotArmyFitness.NATS.Consumer do
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    case BotArmyRuntime.NATS.Publisher.publish("gossip.tavern.narrated", payload) do
+    case BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.tavern.narrated", payload) do
       {:ok, _} -> Logger.info("[Fitness] Tavern reaction: #{text}")
       {:error, reason} -> Logger.warning("[Fitness] Reaction publish failed: #{inspect(reason)}")
     end
@@ -463,7 +463,7 @@ defmodule BotArmyFitness.NATS.Consumer do
     if nats_msg.reply_to do
       payload = message["payload"] || %{}
       goal_id = payload["goal_id"]
-      tenant_id = message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id()
+      tenant_id = message["tenant_id"] || BotArmyLibraryCore.Tenant.default_tenant_id()
 
       goal = goal_id && BotArmyFitness.GoalStore.get(tenant_id, goal_id)
 
@@ -483,7 +483,7 @@ defmodule BotArmyFitness.NATS.Consumer do
             }
         end
 
-      case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+      case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
         {:ok, conn} ->
           Gnat.pub(conn, nats_msg.reply_to, Jason.encode!(response))
           Logger.debug("Published goal progress response")
@@ -519,7 +519,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
           log_payload = %{
             "event_id" => message["event_id"] || Elixir.UUID.uuid4(),
-            "tenant_id" => message["tenant_id"] || BotArmyCore.Tenant.default_tenant_id(),
+            "tenant_id" => message["tenant_id"] || BotArmyLibraryCore.Tenant.default_tenant_id(),
             "user_id" => payload["user_id"],
             "payload" => %{
               "workout_type" => payload["exercise"] || "workout",
@@ -533,7 +533,7 @@ defmodule BotArmyFitness.NATS.Consumer do
 
         "deferred" ->
           defer_count =
-            BotArmyRuntime.DeferTracker.record_defer(
+            BotArmyLibraryRuntime.DeferTracker.record_defer(
               to_string(payload["user_id"]),
               "fitness"
             )

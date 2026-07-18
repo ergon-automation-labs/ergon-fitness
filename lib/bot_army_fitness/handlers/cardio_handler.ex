@@ -3,7 +3,7 @@ defmodule BotArmyFitness.Handlers.CardioHandler do
   alias BotArmyFitness.CardioSessionStore
 
   def handle_log_cardio(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with activity_type <- payload["activity_type"],

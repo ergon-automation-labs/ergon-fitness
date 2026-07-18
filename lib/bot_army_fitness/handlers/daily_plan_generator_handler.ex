@@ -3,10 +3,10 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
 
   require Logger
   alias BotArmyFitness.{CardioSessionStore, DailyPlanStore, PersonalExerciseStore}
-  alias BotArmyRuntime.NATS.Publisher
+  alias BotArmyLibraryRuntime.NATS.Publisher
 
   def handle_generate(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
 
     try do
       workout_type = determine_workout_type(tenant_id)

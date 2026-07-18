@@ -3,7 +3,7 @@ defmodule BotArmyFitness.Handlers.PersonalExercisesHandler do
   alias BotArmyFitness.PersonalExerciseStore
 
   def handle_list_by_equipment(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     equipment_type = payload["equipment_type"]
 
@@ -24,7 +24,7 @@ defmodule BotArmyFitness.Handlers.PersonalExercisesHandler do
   end
 
   def handle_save_exercise(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with name <- payload["name"],

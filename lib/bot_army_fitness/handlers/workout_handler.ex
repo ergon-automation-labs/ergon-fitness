@@ -17,7 +17,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   Returns a list of recent workouts for the user.
   """
   def handle_list(message, reply_to) when is_binary(reply_to) and reply_to != "" do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     limit = Map.get(payload, "limit", 10)
     days = Map.get(payload, "days", 30)
@@ -50,7 +50,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   Validates the workout data and publishes a workout.logged event.
   """
   def handle_log(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -71,7 +71,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
           {:ok, workout} ->
             Logger.info("Workout logged: event_id=#{event_id}, workout_id=#{workout["id"]}")
 
-            BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_logged", 1,
+            BotArmyLibraryRuntime.Outcomes.emit("fitness", "workout", "workout_logged", 1,
               metadata: %{
                 workout_id: workout["id"],
                 workout_type: payload["workout_type"],
@@ -82,7 +82,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
             # Record outcome: workout was completed
             try do
-              BotArmyLearning.OutcomeTracker.record(
+              BotArmyLibraryLearning.OutcomeTracker.record(
                 workout["id"],
                 "fitness.workout",
                 "suggested",
@@ -103,7 +103,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
             # Fire-and-forget context signal for context broker
             try do
-              BotArmyCore.IntegrationGates.context_publish("context.signal.fitness", %{
+              BotArmyLibraryCore.IntegrationGates.context_publish("context.signal.fitness", %{
                 "type" => "workout_completed",
                 "duration_minutes" => Map.get(payload, "duration_minutes"),
                 "workout_type" => payload["workout_type"]
@@ -117,7 +117,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
           {:error, reason} ->
             Logger.warning("Failed to persist workout: #{inspect(reason)}")
 
-            BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_log_failed", 0,
+            BotArmyLibraryRuntime.Outcomes.emit("fitness", "workout", "workout_log_failed", 0,
               metadata: %{
                 workout_type: payload["workout_type"],
                 reason: inspect(reason),
@@ -132,7 +132,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       {:error, reason} ->
         Logger.warning("Invalid workout payload: #{inspect(reason)}")
 
-        BotArmyRuntime.Outcomes.emit("fitness", "workout", "workout_log_invalid", 0,
+        BotArmyLibraryRuntime.Outcomes.emit("fitness", "workout", "workout_log_invalid", 0,
           metadata: %{
             reason: inspect(reason),
             tenant_id: tenant_id
@@ -216,7 +216,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   end
 
   defp reply(reply_to, payload) do
-    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
       {:ok, conn} ->
         Gnat.pub(conn, reply_to, Jason.encode!(payload))
 
