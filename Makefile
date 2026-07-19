@@ -198,7 +198,7 @@ pre-push-cleanup:
 		echo "✓ No hook changes"; \
 	else \
 		echo "📋 Staging hook changes..."; \
-		git add git-hooks/pre-push; \
+		git add git-hooks/pre-push git-hooks/post-push; \
 		git commit -m "chore: sync pre-push hook" || true; \
 	fi
 	@if git diff --quiet mix.lock; then \
