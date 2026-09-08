@@ -2,7 +2,7 @@ defmodule BotArmyFitness.Scheduler do
   @moduledoc """
   Fitness reminders via shared reminder scheduler library.
 
-  Provides check function for BotArmyReminderScheduler to determine
+  Provides check function for BotArmyLibraryRuntime.Reminders to determine
   when to remind about workouts based on time since last workout.
 
   Uses urgency escalation:
@@ -16,7 +16,7 @@ defmodule BotArmyFitness.Scheduler do
   @doc """
   Check for workouts that need reminding.
 
-  Called by BotArmyReminderScheduler on a periodic basis (default: hourly).
+  Called by BotArmyLibraryRuntime.Reminders on a periodic basis (default: hourly).
   Returns list of {goal_id, days_since_workout} tuples for goals that haven't been exercised.
   """
   def check_workouts_needed() do
