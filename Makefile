@@ -57,12 +57,6 @@ reset-db:
 init:
 	@if [ ! -d .git ]; then git init; echo "Git initialized."; else echo "Git already initialized."; fi
 
-_compile-impl:
-	@LOG_FILE="/tmp/compile-fitness-$$(date +%s).log"; \
-	echo "Compiling fitness and logging to $$LOG_FILE..."; \
-	$(MIX) compile 2>&1 | tee "$$LOG_FILE"; \
-	echo "✓ Compilation log: $$LOG_FILE"
-
 deps:
 	$(MIX) deps.get
 
@@ -89,9 +83,6 @@ test-integration:
 
 test-full:
 	$(MIX) test --include integration --include nats_live --trace
-
-credo:
-	$(MIX) credo --only warning
 
 dialyzer: deps
 	$(MIX) dialyzer
@@ -200,37 +191,7 @@ t$(MAKE) sync-release-version;
 			|| echo "⚠️  Deploy request unanswered (pipeline down?) - deploy manually: cd ../bot_army_infra && make salt-apply-bot BOT=$${BOT_NAME}"; \
 	fi; \
 	echo "" 
-pre-push-cleanup:
-	@echo "🧹 Cleaning up pre-push artifacts..."
-	@if git diff --quiet git-hooks/pre-push; then \
-		echo "✓ No hook changes"; \
-	else \
-		echo "📋 Staging hook changes..."; \
-		git add git-hooks/pre-push git-hooks/post-push; \
-		git commit -m "chore: sync pre-push hook" || true; \
-	fi
-	@if git diff --quiet mix.lock; then \
-		echo "✓ No lock file changes"; \
-	else \
-		echo "📋 Staging lock file changes..."; \
-		git add mix.lock; \
-		git commit -m "chore: lock file updates from pre-push validation" || true; \
-	fi
-	@echo "✓ Ready to push"
 
-push: test compile credo pre-push-cleanup
-	@echo "✅ All validations passed"
-	@echo "$$(date +%s)" > .push-validated
-	@echo "✓ Proof-of-validation created"
-	@$(MAKE) git-push
-
-
-git-push: pre-push-cleanup
-	@BOT_NAME=fitness; \
-	LOG_FILE="/tmp/git-push-$${BOT_NAME}-$$(date +%s).log"; \
-	echo "Pushing to origin/main and logging to $$LOG_FILE..."; \
-	git push > "$$LOG_FILE" 2>&1 || { cat "$$LOG_FILE"; echo "✗ Push failed — log: $$LOG_FILE"; exit 1; }; cat "$$LOG_FILE"; \
-	echo "✓ Log saved: $$LOG_FILE"
 
 push-and-publish: git-push publish-release
 
@@ -245,13 +206,6 @@ logs:
 
 
 .PHONY: bump-version
-
-bump-version:
-	@if [ -z "$(BUMP)" ]; then \
-		echo "Usage: make bump-version BUMP=major|minor|patch"; \
-		exit 1; \
-	fi
-	@$(MAKE) -C .. bump-version BOT=$(shell basename $(CURDIR)) BUMP=$(BUMP)
 
 # Shared targets (push, credo, pre-push-cleanup, bump-version, git-push).
 # Defined once in bot_army_infra so they cannot drift per repo.
