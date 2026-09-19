@@ -169,7 +169,7 @@ publish-release:
 			--draft=false; \
 	fi; \
 	echo "✓ Release published to GitHub"; \
-t$(MAKE) sync-release-version;
+	$(MAKE) sync-release-version; \
 	echo ""; \
 	echo "Requesting deploy via deploy pipeline (deploy.release.requested.<target>)..."; \
 	BOT_NAME=$$(basename $$(pwd) | sed 's/bot_army_//'); \
