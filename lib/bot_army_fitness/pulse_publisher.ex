@@ -136,17 +136,24 @@ defmodule BotArmyFitness.PulsePublisher do
       end
 
     if text do
-      gossip = %{
-        "event" => "gossip.tavern.narrated",
-        "source" => "fitness_bot",
-        "text" => text,
-        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
-      }
-
-      case BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.tavern.narrated", gossip) do
+      case BotArmyLibraryRuntime.NATS.Publisher.publish(
+             "gossip.tavern.narrated",
+             gossip_envelope(text)
+           ) do
         {:ok, _} -> Logger.info("[PulsePublisher] Published tavern gossip")
         {:error, reason} -> Logger.warning("[PulsePublisher] Gossip failed: #{inspect(reason)}")
       end
     end
+  end
+
+  @doc false
+  def gossip_envelope(text) do
+    BotArmyLibraryCore.NATS.Envelope.build(
+      "gossip.tavern.narrated",
+      %{"text" => text, "tavern" => true},
+      source: "fitness_bot",
+      triggered_by: "scheduler",
+      tenant_id: BotArmyLibraryRuntime.Tenant.default_tenant_id()
+    )
   end
 end
