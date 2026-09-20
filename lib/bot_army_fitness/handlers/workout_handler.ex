@@ -17,12 +17,37 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   Returns a list of recent workouts for the user.
   """
   def handle_list(message, reply_to) when is_binary(reply_to) and reply_to != "" do
+    reply(reply_to, list_response(message))
+  end
+
+  def handle_list(_message, _reply_to), do: :ok
+
+  @doc """
+  Build the `fitness.workout.list` response payload for a request.
+
+  Pure apart from the workout store read: applies the user filter, recency sort
+  and limit, then returns the response map. Split out of `handle_list/2` so the
+  response shape is testable without a live NATS connection.
+
+  `WorkoutStore.list/1` replies with a tagged tuple (`{:ok, workouts}`). A failed
+  or unexpected read degrades to an empty list instead of raising, because an
+  exception here terminates the consumer process and drops every fitness
+  subscription with it.
+  """
+  def list_response(message) do
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     limit = Map.get(payload, "limit", 10)
-    days = Map.get(payload, "days", 30)
 
-    workouts = workout_store().list(tenant_id)
+    workouts =
+      case workout_store().list(tenant_id) do
+        {:ok, workouts} when is_list(workouts) ->
+          workouts
+
+        other ->
+          Logger.warning("[WorkoutHandler] Unexpected workout store reply: #{inspect(other)}")
+          []
+      end
 
     filtered_workouts =
       workouts
@@ -33,16 +58,12 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       |> Enum.sort_by(fn w -> w["date"] || "" end, :desc)
       |> Enum.take(limit)
 
-    response = %{
+    %{
       "workouts" => filtered_workouts,
       "count" => length(filtered_workouts),
       "limit" => limit
     }
-
-    reply(reply_to, response)
   end
-
-  def handle_list(_message, _reply_to), do: :ok
 
   @doc """
   Handle workout logging event.
