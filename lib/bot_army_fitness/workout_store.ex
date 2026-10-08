@@ -268,8 +268,8 @@ defmodule BotArmyFitness.WorkoutStore do
       "intensity" => workout.intensity,
       "calories" => workout.calories,
       "location" => workout.location,
-      "created_at" => workout.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => workout.updated_at |> NaiveDateTime.to_iso8601()
+      "created_at" => workout.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
+      "updated_at" => workout.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 end
