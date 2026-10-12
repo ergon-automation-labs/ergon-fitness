@@ -100,7 +100,12 @@ defmodule BotArmyFitness.Handlers.TodayPlanHandler do
       "data" => %{
         "plan" => plan["description"],
         "title" => plan["title"],
-        "workout_type" => plan["workout_type"],
+        # Fold a present value onto the one vocabulary; a plan that does not name
+        # a type stays nil rather than having "other" invented for it. Before
+        # this, a cached plan's display name ("Strength Training") went out as a
+        # `workout_type`.
+        "workout_type" =>
+          plan["workout_type"] && WorkoutTypes.normalise_type(plan["workout_type"]),
         "duration_minutes" => plan["duration_minutes"],
         "intensity" => plan["intensity"],
         "estimated_calories" => plan["estimated_calories"]

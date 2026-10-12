@@ -517,14 +517,28 @@ defmodule BotArmyFitness.NATS.Consumer do
             %{"error" => "Goal not found"}
 
           goal_data ->
-            workouts_last_30 = count_recent_workouts(tenant_id)
             days_remaining = days_until_target(goal_data["target_date"])
 
-            %{
-              "goal" => goal_data,
-              "workouts_last_30_days" => workouts_last_30,
-              "days_remaining" => days_remaining
-            }
+            # The workout count is a database read now (the store keeps nothing in
+            # memory). A read that fails must not crash this process — an
+            # exception here drops every fitness subscription — and must not be
+            # reported as "0 workouts" either.
+            case count_recent_workouts(tenant_id) do
+              {:ok, count} ->
+                %{
+                  "goal" => goal_data,
+                  "workouts_last_30_days" => count,
+                  "days_remaining" => days_remaining
+                }
+
+              {:error, reason} ->
+                %{
+                  "goal" => goal_data,
+                  "workouts_last_30_days" => nil,
+                  "workouts_error" => to_string(reason),
+                  "days_remaining" => days_remaining
+                }
+            end
         end
 
       case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
@@ -539,18 +553,32 @@ defmodule BotArmyFitness.NATS.Consumer do
   end
 
   defp count_recent_workouts(tenant_id) do
-    {:ok, workouts} = BotArmyFitness.WorkoutStore.list(tenant_id)
-    thirty_days_ago = DateTime.add(DateTime.utc_now(), -30, :day)
+    case BotArmyFitness.WorkoutStore.list(tenant_id) do
+      {:ok, workouts} when is_list(workouts) ->
+        thirty_days_ago = DateTime.add(DateTime.utc_now(), -30, :day)
 
-    Enum.count(workouts, fn w ->
-      case NaiveDateTime.from_iso8601(w["created_at"] || "") do
-        {:ok, created_naive} ->
-          DateTime.compare(DateTime.from_naive!(created_naive, "Etc/UTC"), thirty_days_ago) != :lt
+        count =
+          Enum.count(workouts, fn w ->
+            case NaiveDateTime.from_iso8601(w["created_at"] || "") do
+              {:ok, created_naive} ->
+                DateTime.compare(DateTime.from_naive!(created_naive, "Etc/UTC"), thirty_days_ago) !=
+                  :lt
 
-        _ ->
-          false
-      end
-    end)
+              _ ->
+                false
+            end
+          end)
+
+        {:ok, count}
+
+      other ->
+        Logger.warning("Could not read workouts to count them: #{inspect(other)}")
+        {:error, :unavailable}
+    end
+  rescue
+    e ->
+      Logger.warning("Could not read workouts to count them: #{Exception.message(e)}")
+      {:error, :unavailable}
   end
 
   defp handle_check_in_response(message) do

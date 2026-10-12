@@ -2,6 +2,7 @@ defmodule BotArmyFitness.WorkoutTypesTest do
   use ExUnit.Case
   @moduletag :core
 
+  alias BotArmyFitness.Schemas.Workout
   alias BotArmyFitness.WorkoutTypes
 
   # The schemas repo is a sibling in the workspace (`config/repos.toml` lists it,
@@ -182,6 +183,90 @@ defmodule BotArmyFitness.WorkoutTypesTest do
              and enums no handler has ever used, so it could only mislead.
              """
     end
+  end
+
+  describe "parity with the Ecto changeset (the list that decides a write)" do
+    # A fifth copy of the vocabulary lived in `Schemas.Workout.changeset/2`.
+    # Nothing compared it to the others, and it had drifted to four intensities —
+    # `high` and `very_high`, which appear nowhere else in the bot — while
+    # rejecting `intense`. The live probe found it: the request was answered, the
+    # log looked accepted, and the insert failed on `validation: :inclusion`.
+    # These are the comparisons that were missing.
+    test "every value the vocabulary stores is accepted by the changeset" do
+      for type <- WorkoutTypes.values() do
+        changeset = Workout.changeset(%Workout{}, attrs(%{"exercise_type" => type}))
+
+        assert changeset.valid?,
+               "#{type} is in values/0 and the changeset refuses it"
+      end
+    end
+
+    test "every intensity the surfaces offer is accepted by the changeset" do
+      for intensity <- WorkoutTypes.intensities() do
+        changeset = Workout.changeset(%Workout{}, attrs(%{"intensity" => intensity}))
+
+        assert changeset.valid?,
+               "#{intensity} is in intensities/0 and the changeset refuses it"
+      end
+    end
+
+    test "the log the phone actually sends is accepted" do
+      # The exact body the probe sent, minus the fold the handler does first.
+      changeset =
+        Workout.changeset(
+          %Workout{},
+          attrs(%{"exercise_type" => "other", "intensity" => "intense"})
+        )
+
+      assert changeset.valid?
+    end
+
+    test "the words that survived only in the changeset are gone" do
+      for intensity <- ["high", "very_high"] do
+        changeset = Workout.changeset(%Workout{}, attrs(%{"intensity" => intensity}))
+
+        refute changeset.valid?,
+               "#{intensity} is not an intensity this bot speaks, so the column should not accept it"
+
+        assert %{intensity: ["is invalid"]} = errors_on(changeset)
+      end
+    end
+
+    test "a type the picker never offers is refused" do
+      changeset = Workout.changeset(%Workout{}, attrs(%{"exercise_type" => "pushups"}))
+
+      refute changeset.valid?
+      assert %{exercise_type: ["is invalid"]} = errors_on(changeset)
+    end
+
+    test "a raw alias is not a stored value, so the fold has to come first" do
+      # `cardio` is an alias the handler folds onto `running` before it stores
+      # anything. The column holds `values/0`, so storing the alias itself is
+      # refused. This documents that the fold is load-bearing, not cosmetic.
+      refute WorkoutTypes.known?("cardio")
+
+      refute Workout.changeset(%Workout{}, attrs(%{"exercise_type" => "cardio"})).valid?
+
+      assert WorkoutTypes.normalise_type("cardio") in WorkoutTypes.values()
+    end
+  end
+
+  defp attrs(overrides) do
+    Map.merge(
+      %{
+        "title" => "Morning run",
+        "date" => ~D[2026-10-12],
+        "tenant_id" => "00000000-0000-0000-0000-000000000002",
+        "duration_minutes" => 30,
+        "exercise_type" => "running",
+        "intensity" => "moderate"
+      },
+      overrides
+    )
+  end
+
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
   end
 
   defp read_schema(name) do

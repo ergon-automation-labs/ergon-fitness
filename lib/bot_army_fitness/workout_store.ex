@@ -1,32 +1,43 @@
 defmodule BotArmyFitness.WorkoutStore do
   @moduledoc """
-  In-memory workout storage for the Fitness bot.
+  Workout storage: every read is a database read.
 
-  This GenServer maintains the in-memory state of all workouts while Ecto handles
-  persistence to PostgreSQL. On init, it loads all workouts from the database.
-  Every mutation (create, update) is persisted to the database before updating state.
+  This used to be a GenServer holding every workout in memory, loaded once at
+  boot and written through on each create and update. That is a cache of the
+  database, which is fine for one process on one machine and wrong for this bot:
+  **air and mini both run it, and both point at the same `ergon_fitness`
+  database.** A row created on one node was never in the other node's map, so
+  `list/1` answered "these are the workouts" with a list that depended on which
+  node happened to answer. After the two nodes were put on one queue group (so
+  each message goes to exactly one of them) that stopped being a rare
+  divergence and became the normal case: half the reads could not see the row
+  that had just been written.
+
+  There is no cache now. `list/1`, `get/2` and `list_by_date/2` query the
+  database, so any node answers with the same rows, and a read that cannot reach
+  the database fails instead of answering "none".
+
+  `update/2` likewise loads the row it is told to update. It used to check the
+  in-memory map first and answer `{:error, :not_found}` for a row the *other*
+  node had created.
 
   ## API
 
   - `create/1` - Create a new workout
   - `update/2` - Update an existing workout
-  - `get/1` - Retrieve a workout by ID
-  - `list/0` - List all workouts
-  - `list_by_date/1` - List workouts for a specific date
+  - `get/2` - Retrieve a workout by ID, scoped to a tenant
+  - `list/1` - List a tenant's workouts
+  - `list_by_date/2` - List a tenant's workouts for a specific date
   """
 
   @behaviour BotArmyFitness.WorkoutStoreBehaviour
 
-  use GenServer
   require Logger
 
-  @server __MODULE__
+  import Ecto.Query
 
-  # API
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: @server)
-  end
+  alias BotArmyFitness.Repo
+  alias BotArmyFitness.Schemas.Workout
 
   @doc """
   Create a new workout from payload.
@@ -35,88 +46,16 @@ defmodule BotArmyFitness.WorkoutStore do
   """
   @impl true
   def create(payload) when is_map(payload) do
-    GenServer.call(@server, {:create, payload})
-  end
-
-  @impl true
-  def update(workout_id, payload) when is_binary(workout_id) and is_map(payload) do
-    GenServer.call(@server, {:update, workout_id, payload})
-  end
-
-  @impl true
-  def get(tenant_id, workout_id) when is_binary(tenant_id) and is_binary(workout_id) do
-    GenServer.call(@server, {:get, tenant_id, workout_id})
-  end
-
-  @impl true
-  def list(tenant_id) when is_binary(tenant_id) do
-    GenServer.call(@server, {:list, tenant_id})
-  end
-
-  @impl true
-  def list_by_date(tenant_id, date_str) when is_binary(tenant_id) and is_binary(date_str) do
-    GenServer.call(@server, {:list_by_date, tenant_id, date_str})
-  end
-
-  @impl true
-  def clear do
-    GenServer.call(@server, :clear)
-  end
-
-  # Callbacks
-
-  @impl true
-  def init(_opts) do
-    Logger.info("WorkoutStore started")
-    # Load all workouts from database into GenServer state
-    # Gracefully handle database unavailability (e.g., in tests)
-    state =
-      try do
-        workouts = BotArmyFitness.Repo.all(BotArmyFitness.Schemas.Workout)
-
-        Enum.reduce(workouts, %{}, fn workout, acc ->
-          Map.put(acc, workout.id |> to_string(), schema_to_map(workout))
-        end)
-      rescue
-        _ ->
-          Logger.warning(
-            "Could not load workouts from database (database unavailable). Starting with empty state."
-          )
-
-          %{}
-      end
-
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_call({:create, payload}, _from, state) do
     workout_id = Ecto.UUID.generate()
 
-    # Parse date if present
-    workout_date =
-      case Map.get(payload, "date") do
-        nil ->
-          Date.utc_today()
-
-        date_str when is_binary(date_str) ->
-          case Date.from_iso8601(date_str) do
-            {:ok, date} -> date
-            {:error, _} -> Date.utc_today()
-          end
-
-        _ ->
-          Date.utc_today()
-      end
-
     changeset =
-      BotArmyFitness.Schemas.Workout.changeset(
-        %BotArmyFitness.Schemas.Workout{id: workout_id},
+      Workout.changeset(
+        %Workout{id: workout_id},
         %{
           "tenant_id" => payload["tenant_id"],
           "user_id" => Map.get(payload, "user_id"),
           "title" => payload["title"],
-          "date" => workout_date,
+          "date" => workout_date(Map.get(payload, "date")),
           "duration_minutes" => payload["duration_minutes"],
           "exercise_type" => payload["exercise_type"],
           "intensity" => Map.get(payload, "intensity", "moderate"),
@@ -125,138 +64,138 @@ defmodule BotArmyFitness.WorkoutStore do
         }
       )
 
-    case BotArmyFitness.Repo.insert(changeset) do
+    case Repo.insert(changeset) do
       {:ok, db_workout} ->
-        workout = schema_to_map(db_workout)
-        new_state = Map.put(state, workout_id, workout)
         Logger.info("Created workout in database: #{workout_id}")
-        {:reply, {:ok, workout}, new_state}
+        {:ok, schema_to_map(db_workout)}
 
       {:error, changeset} ->
         Logger.error("Failed to create workout: #{inspect(changeset.errors)}")
-        {:reply, {:error, :database_error}, state}
+        {:error, :database_error}
     end
   end
 
+  @doc """
+  Update an existing workout.
+
+  Returns `{:ok, workout}`, `{:error, :not_found}` for an unknown id or one
+  belonging to another tenant, or `{:error, :database_error}`.
+  """
   @impl true
-  def handle_call({:update, workout_id, payload}, _from, state) do
-    case Map.get(state, workout_id) do
-      nil ->
-        {:reply, {:error, :not_found}, state}
+  def update(workout_id, payload) when is_binary(workout_id) and is_map(payload) do
+    with {:ok, uuid} <- cast_id(workout_id),
+         %Workout{} = db_workout <- Repo.get(Workout, uuid) do
+      changeset =
+        Workout.changeset(db_workout, %{
+          "title" => Map.get(payload, "title", db_workout.title),
+          "date" => workout_date(Map.get(payload, "date")) || db_workout.date,
+          "duration_minutes" => Map.get(payload, "duration_minutes", db_workout.duration_minutes),
+          "exercise_type" => Map.get(payload, "exercise_type", db_workout.exercise_type),
+          "intensity" => Map.get(payload, "intensity", db_workout.intensity),
+          "calories" => Map.get(payload, "calories", db_workout.calories),
+          "location" => Map.get(payload, "location", db_workout.location)
+        })
 
-      _workout ->
-        workout_uuid = Ecto.UUID.cast!(workout_id)
+      case Repo.update(changeset) do
+        {:ok, updated_db_workout} ->
+          Logger.info("Updated workout in database: #{workout_id}")
+          {:ok, schema_to_map(updated_db_workout)}
 
-        case BotArmyFitness.Repo.transaction(fn ->
-               db_workout = BotArmyFitness.Repo.get(BotArmyFitness.Schemas.Workout, workout_uuid)
-
-               if db_workout do
-                 workout_date =
-                   case Map.get(payload, "date") do
-                     nil ->
-                       nil
-
-                     date_str when is_binary(date_str) ->
-                       case Date.from_iso8601(date_str) do
-                         {:ok, date} -> date
-                         {:error, _} -> nil
-                       end
-
-                     _ ->
-                       nil
-                   end
-
-                 changeset =
-                   BotArmyFitness.Schemas.Workout.changeset(
-                     db_workout,
-                     %{
-                       "title" => Map.get(payload, "title", db_workout.title),
-                       "date" => workout_date || db_workout.date,
-                       "duration_minutes" =>
-                         Map.get(payload, "duration_minutes", db_workout.duration_minutes),
-                       "exercise_type" =>
-                         Map.get(payload, "exercise_type", db_workout.exercise_type),
-                       "intensity" => Map.get(payload, "intensity", db_workout.intensity),
-                       "calories" => Map.get(payload, "calories", db_workout.calories),
-                       "location" => Map.get(payload, "location", db_workout.location)
-                     }
-                   )
-
-                 case BotArmyFitness.Repo.update(changeset) do
-                   {:ok, updated} -> updated
-                   {:error, changeset} -> BotArmyFitness.Repo.rollback(changeset)
-                 end
-               else
-                 BotArmyFitness.Repo.rollback(:not_found)
-               end
-             end) do
-          {:ok, updated_db_workout} ->
-            updated_workout = schema_to_map(updated_db_workout)
-            new_state = Map.put(state, workout_id, updated_workout)
-            Logger.info("Updated workout in database: #{workout_id}")
-            {:reply, {:ok, updated_workout}, new_state}
-
-          {:error, :not_found} ->
-            {:reply, {:error, :not_found}, state}
-
-          {:error, changeset} ->
-            Logger.error("Failed to update workout: #{inspect(changeset.errors)}")
-            {:reply, {:error, :database_error}, state}
-        end
+        {:error, changeset} ->
+          Logger.error("Failed to update workout: #{inspect(changeset.errors)}")
+          {:error, :database_error}
+      end
+    else
+      :error -> {:error, :not_found}
+      nil -> {:error, :not_found}
     end
   end
 
+  @doc "Retrieve a workout by id, scoped to a tenant. An id from another tenant is `:not_found`."
   @impl true
-  def handle_call({:get, tenant_id, workout_id}, _from, state) do
-    case Map.get(state, workout_id) do
-      nil ->
-        {:reply, {:error, :not_found}, state}
-
-      workout ->
-        if workout["tenant_id"] == tenant_id do
-          {:reply, {:ok, workout}, state}
-        else
-          {:reply, {:error, :not_found}, state}
-        end
+  def get(tenant_id, workout_id) when is_binary(tenant_id) and is_binary(workout_id) do
+    with {:ok, uuid} <- cast_id(workout_id),
+         %Workout{} = workout <- Repo.get(Workout, uuid),
+         true <- to_string(workout.tenant_id) == tenant_id do
+      {:ok, schema_to_map(workout)}
+    else
+      _ -> {:error, :not_found}
     end
   end
 
+  @doc "List a tenant's workouts, straight from the database."
   @impl true
-  def handle_call({:list, tenant_id}, _from, state) do
+  def list(tenant_id) when is_binary(tenant_id) do
     workouts =
-      state
-      |> Map.values()
-      |> Enum.filter(&(&1["tenant_id"] == tenant_id))
+      Workout
+      |> where([w], w.tenant_id == ^tenant_id)
+      |> Repo.all()
+      |> Enum.map(&schema_to_map/1)
 
-    {:reply, {:ok, workouts}, state}
+    {:ok, workouts}
   end
 
+  @doc """
+  List a tenant's workouts for one date.
+
+  `:error` for a date the caller could not have meant. This used to render a
+  malformed date as `{:error, :invalid_date}` only when the *calendar* rejected
+  it; the database read that replaces the cache keeps the same three outcomes.
+  """
   @impl true
-  def handle_call({:list_by_date, tenant_id, date_str}, _from, state) do
+  def list_by_date(tenant_id, date_str) when is_binary(tenant_id) and is_binary(date_str) do
     case Date.from_iso8601(date_str) do
       {:ok, target_date} ->
         workouts =
-          state
-          |> Map.values()
-          |> Enum.filter(fn w ->
-            w["tenant_id"] == tenant_id and w["date"] == target_date |> to_string()
-          end)
+          Workout
+          |> where([w], w.tenant_id == ^tenant_id and w.date == ^target_date)
+          |> Repo.all()
+          |> Enum.map(&schema_to_map/1)
 
-        {:reply, {:ok, workouts}, state}
+        {:ok, workouts}
 
       {:error, _} ->
-        {:reply, {:error, :invalid_date}, state}
+        {:error, :invalid_date}
     end
   end
 
+  @doc """
+  Delete every workout.
+
+  This answers `:ok` and used to delete nothing — it cleared the in-memory map
+  and left the database alone, which is a lie in a function called `clear`. It
+  now deletes the rows. Nothing in the bot calls it; it exists for tests and
+  tooling, and it is genuinely destructive.
+  """
   @impl true
-  def handle_call(:clear, _from, _state) do
-    Logger.debug("Clearing all workouts")
-    {:reply, :ok, %{}}
+  def clear do
+    {count, _} = Repo.delete_all(Workout)
+    Logger.warning("Deleted #{count} workout(s)")
+    :ok
   end
 
-  # Helper function to convert Ecto schema to map for GenServer state
-  defp schema_to_map(%BotArmyFitness.Schemas.Workout{} = workout) do
+  # Private functions
+
+  defp cast_id(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> :error
+    end
+  end
+
+  defp workout_date(nil), do: Date.utc_today()
+
+  defp workout_date(date_str) when is_binary(date_str) do
+    case Date.from_iso8601(date_str) do
+      {:ok, date} -> date
+      {:error, _} -> Date.utc_today()
+    end
+  end
+
+  defp workout_date(_), do: Date.utc_today()
+
+  # Helper function to convert Ecto schema to map for callers
+  defp schema_to_map(%Workout{} = workout) do
     %{
       "id" => Ecto.UUID.cast!(workout.id) |> to_string(),
       "tenant_id" => workout.tenant_id |> to_string(),
