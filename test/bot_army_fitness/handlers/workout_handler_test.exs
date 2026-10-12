@@ -14,74 +14,184 @@ defmodule BotArmyFitness.Handlers.WorkoutHandlerTest do
   end
 
   describe "handle_log/1" do
-    test "successfully logs a workout" do
-      message = valid_log_message()
+    test "successfully logs a workout and answers with the written workout" do
+      reply = decode(BotArmyFitness.Handlers.WorkoutHandler.handle_log(valid_log_message()))
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == true
+      assert reply["data"]["workout_type"] == "running"
+      assert reply["data"]["duration_minutes"] == 30
+      assert reply["data"]["workout_id"]
+      assert reply["schema_version"] == "1.0"
     end
 
-    test "returns error for missing workout_type" do
-      message =
+    test "answers with a refusal instead of `:ok` for a missing workout_type" do
+      reply =
         valid_log_message()
         |> put_in(["payload", "workout_type"], nil)
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == false
+      assert reply["code"] == "validation_error"
+      assert reply["error"] =~ "workout_type"
     end
 
-    test "returns error for missing duration_minutes" do
-      message =
+    test "answers with a refusal for a missing duration_minutes" do
+      reply =
         valid_log_message()
         |> put_in(["payload", "duration_minutes"], nil)
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == false
+      assert reply["error"] =~ "duration_minutes"
+    end
+
+    test "accepts the fields at the top level, not only under payload" do
+      # The consumer's request/reply decode path merges the body at the top level
+      # and only sets "event". Reading only message["payload"] silently dropped
+      # every such body, which is why the verb had no producers.
+      flat = %{
+        "event" => "fitness.workout.log",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => "user-1",
+        "workout_type" => "swimming",
+        "duration_minutes" => 45
+      }
+
+      reply = flat |> BotArmyFitness.Handlers.WorkoutHandler.handle_log() |> decode()
+
+      assert reply["ok"] == true
+      assert reply["data"]["workout_type"] == "swimming"
+      assert reply["data"]["duration_minutes"] == 45
     end
 
     test "accepts optional calories_burned field" do
-      message =
+      reply =
         valid_log_message()
         |> put_in(["payload", "calories_burned"], 500)
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == true
     end
 
     test "accepts optional intensity field" do
-      message =
+      reply =
         valid_log_message()
         |> put_in(["payload", "intensity"], "high")
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == true
+      # "high" is folded onto the one canonical intensity list
+      assert reply["data"]["intensity"] == "intense"
+    end
+
+    test "defaults intensity to moderate when the log does not carry one" do
+      reply =
+        valid_log_message()
+        |> put_in(["payload", "intensity"], nil)
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
+
+      assert reply["data"]["intensity"] == "moderate"
     end
 
     test "requires both required fields" do
-      message =
+      reply =
         valid_log_message()
         |> put_in(["payload", "workout_type"], nil)
         |> put_in(["payload", "duration_minutes"], nil)
+        |> then(&BotArmyFitness.Handlers.WorkoutHandler.handle_log/1)
+        |> decode()
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+      assert reply["ok"] == false
     end
 
-    test "validates workout with all fields" do
-      message =
-        valid_log_message()
-        |> put_in(["payload", "calories_burned"], 350)
-        |> put_in(["payload", "intensity"], "medium")
+    test "folds every workout type onto the one canonical vocabulary" do
+      for {sent, canonical} <- [
+            {"running", "running"},
+            {"cycling", "cycling"},
+            {"swimming", "swimming"},
+            {"weight_training", "strength"},
+            {"yoga", "yoga"},
+            {"pushups", "other"}
+          ] do
+        message = valid_log_message() |> put_in(["payload", "workout_type"], sent)
 
-      assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
-    end
+        reply =
+          message
+          |> BotArmyFitness.Handlers.WorkoutHandler.handle_log()
+          |> decode()
 
-    test "handles various workout types" do
-      for workout_type <- ["running", "cycling", "swimming", "weight_training", "yoga"] do
-        message = valid_log_message() |> put_in(["payload", "workout_type"], workout_type)
-        assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+        assert reply["ok"] == true
+        assert reply["data"]["workout_type"] == canonical
       end
+    end
+
+    test "keeps the human's own word in the title when the type is unknown" do
+      parent = self()
+
+      stub(BotArmyFitness.WorkoutStoreMock, :create, fn payload ->
+        send(parent, {:stored, payload})
+        {:ok, %{"id" => UUID.uuid4(), "title" => payload["title"], "date" => "2026-03-01"}}
+      end)
+
+      valid_log_message()
+      |> put_in(["payload", "workout_type"], "pushups")
+      |> BotArmyFitness.Handlers.WorkoutHandler.handle_log()
+
+      assert_received {:stored, stored}
+      assert stored["exercise_type"] == "other"
+      assert stored["title"] == "pushups"
     end
 
     test "accepts different duration values" do
       for duration <- [15, 30, 45, 60, 120] do
         message = valid_log_message() |> put_in(["payload", "duration_minutes"], duration)
-        assert :ok = BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+
+        reply =
+          message
+          |> BotArmyFitness.Handlers.WorkoutHandler.handle_log()
+          |> decode()
+
+        assert reply["ok"] == true
+        assert reply["data"]["duration_minutes"] == duration
       end
+    end
+
+    test "refuses honestly when the store fails, instead of claiming success" do
+      stub(BotArmyFitness.WorkoutStoreMock, :create, fn _payload -> {:error, :db_down} end)
+
+      reply =
+        valid_log_message()
+        |> BotArmyFitness.Handlers.WorkoutHandler.handle_log()
+        |> decode()
+
+      assert reply["ok"] == false
+      assert reply["code"] == "persist_failed"
+    end
+
+    test "stores exercise_type from workout_type and keeps calories" do
+      parent = self()
+
+      stub(BotArmyFitness.WorkoutStoreMock, :create, fn payload ->
+        send(parent, {:stored, payload})
+        {:ok, %{"id" => UUID.uuid4(), "title" => payload["title"], "date" => "2026-03-01"}}
+      end)
+
+      reply =
+        valid_log_message()
+        |> BotArmyFitness.Handlers.WorkoutHandler.handle_log()
+        |> decode()
+
+      assert_received {:stored, stored}
+      assert stored["exercise_type"] == "running"
+      assert stored["calories"] == 300
+      # `valid_log_message/0` carries `"user_id" => nil`, so the tenant default applies
+      assert stored["user_id"] == BotArmyLibraryCore.Tenant.default_user_id()
+      assert reply["data"]["date"] == "2026-03-01"
     end
   end
 
@@ -175,6 +285,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandlerTest do
   end
 
   # Helper functions
+
+  defp decode(encoded) when is_binary(encoded), do: Jason.decode!(encoded)
 
   defp list_message(overrides \\ %{}) do
     Map.merge(

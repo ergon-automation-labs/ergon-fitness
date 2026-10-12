@@ -7,9 +7,21 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   - `fitness.workout.list` - List recent workouts
 
   Each operation validates the input and publishes response events.
+
+  `fitness.workout.log` is a **request/reply** verb: the consumer decodes the body
+  as plain JSON (its request-reply path merges the body at the top level and only
+  sets `"event"`), so this handler accepts the fields at the top level **or**
+  under `"payload"`, and answers with a
+  `BotArmyLibraryRuntime.NATS.Reply` payload. Before this it was a `:subscribe`
+  verb that read only `message["payload"]` and never replied: a flat body was
+  silently dropped, and a caller could not tell an accepted log from a discarded
+  one.
   """
 
   require Logger
+
+  alias BotArmyFitness.WorkoutTypes
+  alias BotArmyLibraryRuntime.NATS.Reply
 
   @doc """
   Handle workout list request.
@@ -68,23 +80,30 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   @doc """
   Handle workout logging event.
 
-  Validates the workout data and publishes a workout.logged event.
+  Validates the workout data, persists it, publishes a `fitness.workout.logged`
+  event, and returns the request/reply answer (already JSON-encoded). Never
+  raises, and always answers, so a caller can tell a refusal from a write.
   """
   def handle_log(message) do
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
-    payload = message["payload"]
+    payload = log_payload(message)
 
     case validate_log_payload(payload) do
       :ok ->
         store_payload = %{
           "tenant_id" => tenant_id,
           "user_id" => user_id,
-          "title" => Map.get(payload, "title", payload["workout_type"]),
-          "exercise_type" => payload["workout_type"],
+          # the human's own word is kept in the title; the reportable field is
+          # folded onto the one canonical vocabulary
+          "title" => Map.get(payload, "title") || payload["workout_type"],
+          "exercise_type" => WorkoutTypes.normalise_type(payload["workout_type"]),
           "duration_minutes" => payload["duration_minutes"],
           "calories" => Map.get(payload, "calories_burned"),
-          "intensity" => Map.get(payload, "intensity", "moderate"),
+          # `Map.get/3`'s default does not fire when the key is present but nil,
+          # which would send NULL into a `null: false` column and refuse the write.
+          # Treat an explicit nil exactly like an absent field.
+          "intensity" => WorkoutTypes.normalise_intensity(payload["intensity"]),
           "date" => Map.get(payload, "date")
         }
 
@@ -133,7 +152,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
               _ -> :ok
             end
 
-            :ok
+            ok_reply(workout, payload)
 
           {:error, reason} ->
             Logger.warning("Failed to persist workout: #{inspect(reason)}")
@@ -147,7 +166,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
             )
 
             publish_error(event_id, reason, "Failed to persist workout", tenant_id, user_id)
-            :ok
+            Reply.error("failed to persist workout", :persist_failed)
         end
 
       {:error, reason} ->
@@ -161,11 +180,18 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
         )
 
         publish_error(event_id, reason, "Invalid workout data", tenant_id, user_id)
-        :ok
+        invalid_reply(reason)
     end
   end
 
   # Private functions
+
+  # The handler is reached two ways: as a decoded **envelope** (the
+  # event-envelope decode path leaves the fields under `"payload"`) and as a plain
+  # **request/reply body** (the consumer's request-reply path merges the body at
+  # the top level). Reading only `message["payload"]` silently rejected every flat
+  # body, so accept both shapes.
+  defp log_payload(message), do: message["payload"] || message
 
   defp validate_log_payload(payload) when is_map(payload) do
     with :ok <- require_field(payload, "workout_type"),
@@ -185,6 +211,25 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
     end
   end
 
+  defp ok_reply(workout, payload) do
+    Reply.ok(%{
+      "workout_id" => workout["id"],
+      "title" => workout["title"],
+      "workout_type" => WorkoutTypes.normalise_type(payload["workout_type"]),
+      "duration_minutes" => payload["duration_minutes"],
+      "intensity" => WorkoutTypes.normalise_intensity(payload["intensity"]),
+      "date" => workout["date"]
+    })
+  end
+
+  defp invalid_reply({:missing_field, field}) do
+    Reply.error("missing required field: #{field}", :validation_error)
+  end
+
+  defp invalid_reply(reason) do
+    Reply.error("invalid workout payload: #{inspect(reason)}", :validation_error)
+  end
+
   defp publish_event(event_type, payload, event_id, tenant_id, user_id) do
     event_data = %{
       "event" => event_type,
@@ -196,7 +241,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       "schema_version" => "1.0",
       "tenant_id" => tenant_id,
       "user_id" => user_id,
-      "intensity" => Map.get(payload, "intensity", "moderate"),
+      "intensity" => payload["intensity"] || "moderate",
       "workout_type" => payload["workout_type"],
       "payload" => %{
         "workout_type" => payload["workout_type"],

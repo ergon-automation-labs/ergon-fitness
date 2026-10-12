@@ -30,8 +30,16 @@ defmodule BotArmyFitness.NATS.Consumer do
   @version Mix.Project.config()[:version]
   @registry_heartbeat_ms 20_000
 
+  # Both air and mini run this bot. Without a queue group each node processed
+  # every fitness message, so every event landed twice (two workouts from one
+  # log, two plan generations, two replies racing back to one requester). A
+  # shared group makes the two nodes one logical subscriber: NATS delivers each
+  # message to exactly one of them, and either can answer. This is the same
+  # mechanism `BotArmyLibraryRuntime.Registry` and `…Intent.VetoListener` use.
+  @queue_group "fitness_bot"
+
   @subjects [
-    %{subject: "fitness.workout.log", type: :subscribe, description: "Log workout"},
+    %{subject: "fitness.workout.log", type: :request_reply, description: "Log workout"},
     %{subject: "fitness.workout.list", type: :request_reply, description: "List recent workouts"},
     %{subject: "fitness.goal.set", type: :subscribe, description: "Set fitness goal"},
     %{subject: "fitness.goal.update", type: :subscribe, description: "Update fitness goal"},
@@ -127,10 +135,7 @@ defmodule BotArmyFitness.NATS.Consumer do
         BotArmyLibraryRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to fitness topics")
 
-        Enum.each(@subjects, fn %{subject: subject} ->
-          Gnat.sub(conn, self(), subject)
-          Logger.info("Fitness consumer subscribed to #{subject}")
-        end)
+        subscribe_all(fn subject, opts -> Gnat.sub(conn, self(), subject, opts) end)
 
         deployment_status =
           Application.get_env(:bot_army_fitness, :deployment_status, "experimental")
@@ -148,7 +153,9 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       {:error, reason} ->
         next_attempt = state.reconnect_attempt + 1
-        delay = BotArmyLibraryRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
+
+        delay =
+          BotArmyLibraryRuntime.NATS.Connection.calculate_backoff(state.reconnect_attempt, 1000)
 
         Logger.warning(
           "Failed to get NATS connection: #{inspect(reason)}, retrying in #{delay}ms (attempt #{next_attempt})"
@@ -244,7 +251,10 @@ defmodule BotArmyFitness.NATS.Consumer do
 
     case event do
       "fitness.workout.log" ->
-        BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.WorkoutHandler.handle_log(message)
+        )
 
       "fitness.workout.list" ->
         BotArmyFitness.Handlers.WorkoutHandler.handle_list(message, nats_msg.reply_to)
@@ -458,6 +468,40 @@ defmodule BotArmyFitness.NATS.Consumer do
       {:error, reason} -> Logger.warning("[Fitness] Reaction publish failed: #{inspect(reason)}")
     end
   end
+
+  # `fitness.workout.log` answers with a `BotArmyLibraryRuntime.NATS.Reply`
+  # payload, already JSON-encoded by the handler. A `nil` reply subject (a plain
+  # publish) is still a valid way to log: the write stands, there is just nobody
+  # to answer.
+  defp publish_reply(nil, _encoded), do: :ok
+
+  defp publish_reply(reply_to, encoded) when is_binary(encoded) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
+      {:ok, conn} ->
+        Gnat.pub(conn, reply_to, encoded)
+
+      {:error, reason} ->
+        Logger.warning("Failed to publish workout log reply: #{inspect(reason)}")
+    end
+  end
+
+  @doc """
+  Subscribe to every fitness subject on the shared queue group.
+
+  Takes the subscriber function so the grouping is assertable without a broker.
+  """
+  def subscribe_all(subscriber_fun) when is_function(subscriber_fun, 2) do
+    Enum.each(@subjects, fn %{subject: subject} ->
+      subscriber_fun.(subject, queue_group: @queue_group)
+      Logger.info("Fitness consumer subscribed to #{subject} (queue_group=#{@queue_group})")
+    end)
+  end
+
+  @doc "The subjects this consumer registers and answers on."
+  def subjects, do: @subjects
+
+  @doc "The shared queue group both nodes join."
+  def queue_group, do: @queue_group
 
   defp handle_goal_progress(nats_msg, message) do
     if nats_msg.reply_to do
