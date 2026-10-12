@@ -141,6 +141,30 @@ defmodule BotArmyFitness.WorkoutTypes do
   def label(type) when type in @types, do: String.capitalize(type)
   def label(_), do: "Workout"
 
+  @doc "A human label for a canonical intensity."
+  def intensity_label("light"), do: "Light"
+  def intensity_label("intense"), do: "Intense"
+  def intensity_label(_), do: "Moderate"
+
+  @doc """
+  The activities a picker may offer, as `value`/`label` pairs.
+
+  `types/0` and not `values/0`: `"other"` is a value the bot stores, never an
+  activity anybody chooses. Sending the label with the value is what keeps a
+  surface from owning a second, drifting copy of these words — the reason four
+  vocabularies disagreed before this module existed.
+  """
+  def type_options do
+    Enum.map(@types, fn type -> %{"value" => type, "label" => label(type)} end)
+  end
+
+  @doc "The intensities a picker may offer, as `value`/`label` pairs."
+  def intensity_options do
+    Enum.map(@intensities, fn level ->
+      %{"value" => level, "label" => intensity_label(level)}
+    end)
+  end
+
   @doc """
   Whether a value is a type this module knows.
 

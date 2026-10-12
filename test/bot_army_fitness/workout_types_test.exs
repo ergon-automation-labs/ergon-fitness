@@ -34,6 +34,45 @@ defmodule BotArmyFitness.WorkoutTypesTest do
     test "hiit keeps its acronym capitalisation" do
       assert WorkoutTypes.label("hiit") == "HIIT"
     end
+
+    test "every intensity has a label that is not the raw value" do
+      for level <- WorkoutTypes.intensities() do
+        label = WorkoutTypes.intensity_label(level)
+        assert is_binary(label)
+        assert label != ""
+        assert label != level
+        assert String.upcase(String.first(label)) == String.first(label)
+      end
+    end
+  end
+
+  describe "the options a picker is offered" do
+    test "type_options/0 pairs every offered type with the bot's own word" do
+      options = WorkoutTypes.type_options()
+
+      assert Enum.map(options, & &1["value"]) == WorkoutTypes.types()
+
+      for option <- options do
+        assert option["label"] == WorkoutTypes.label(option["value"])
+      end
+    end
+
+    test "intensity_options/0 pairs every intensity with the bot's own word" do
+      options = WorkoutTypes.intensity_options()
+
+      assert Enum.map(options, & &1["value"]) == WorkoutTypes.intensities()
+
+      for option <- options do
+        assert option["label"] == WorkoutTypes.intensity_label(option["value"])
+      end
+    end
+
+    test "the catch-all is offered to nobody" do
+      values = WorkoutTypes.type_options() |> Enum.map(& &1["value"])
+
+      refute WorkoutTypes.other() in values
+      assert WorkoutTypes.other() in WorkoutTypes.values()
+    end
   end
 
   describe "normalise_type/1" do
@@ -154,6 +193,31 @@ defmodule BotArmyFitness.WorkoutTypesTest do
 
       assert data["properties"]["data"]["properties"]["intensity"]["enum"] ==
                WorkoutTypes.intensities()
+    end
+
+    test "the options reply offers exactly types/0 and intensities/0" do
+      # The panel's picker is built from this reply, so this is the guard that
+      # keeps a sixth vocabulary from being born on a surface: the values come
+      # from here, and the labels come from here, and nothing is invented locally.
+      schema = read_schema("fitness.workout.options.reply.json")
+      data = schema["properties"]["data"]["properties"]
+
+      assert data["workout_types"]["items"]["properties"]["value"]["enum"] ==
+               WorkoutTypes.types()
+
+      assert data["intensities"]["items"]["properties"]["value"]["enum"] ==
+               WorkoutTypes.intensities()
+    end
+
+    test "the options reply does not offer the catch-all" do
+      schema = read_schema("fitness.workout.options.reply.json")
+
+      offered =
+        schema["properties"]["data"]["properties"]["workout_types"]["items"]["properties"][
+          "value"
+        ]["enum"]
+
+      refute WorkoutTypes.other() in offered
     end
 
     test "the schema requires exactly the fields the handler requires" do

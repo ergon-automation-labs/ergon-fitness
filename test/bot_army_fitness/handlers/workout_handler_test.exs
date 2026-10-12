@@ -195,6 +195,46 @@ defmodule BotArmyFitness.Handlers.WorkoutHandlerTest do
     end
   end
 
+  describe "handle_options/1" do
+    test "answers with the activities and intensities a picker may offer" do
+      reply = BotArmyFitness.Handlers.WorkoutHandler.handle_options() |> decode()
+
+      assert reply["ok"] == true
+
+      assert reply["data"]["workout_types"] ==
+               Enum.map(BotArmyFitness.WorkoutTypes.types(), fn type ->
+                 %{"value" => type, "label" => BotArmyFitness.WorkoutTypes.label(type)}
+               end)
+
+      assert reply["data"]["intensities"] ==
+               Enum.map(BotArmyFitness.WorkoutTypes.intensities(), fn level ->
+                 %{
+                   "value" => level,
+                   "label" => BotArmyFitness.WorkoutTypes.intensity_label(level)
+                 }
+               end)
+    end
+
+    test "does not offer `other` — it is a stored value, not an activity" do
+      reply = BotArmyFitness.Handlers.WorkoutHandler.handle_options(%{}) |> decode()
+
+      values = Enum.map(reply["data"]["workout_types"], & &1["value"])
+
+      assert values == BotArmyFitness.WorkoutTypes.types()
+      refute "other" in values
+      assert "other" in BotArmyFitness.WorkoutTypes.values()
+    end
+
+    test "every option carries the bot's own word for it" do
+      reply = BotArmyFitness.Handlers.WorkoutHandler.handle_options() |> decode()
+
+      for group <- ["workout_types", "intensities"], option <- reply["data"][group] do
+        assert option["label"] not in [nil, ""]
+        assert option["label"] != option["value"]
+      end
+    end
+  end
+
   describe "list_response/1" do
     test "unwraps the store's tagged tuple instead of raising (regression)" do
       # WorkoutStore.list/1 replies {:ok, workouts}. Treating that tuple as a
@@ -276,6 +316,28 @@ defmodule BotArmyFitness.Handlers.WorkoutHandlerTest do
         BotArmyFitness.Handlers.WorkoutHandler.list_response(list_message(%{"payload" => nil}))
 
       assert response == %{"workouts" => [], "count" => 0, "limit" => 10}
+    end
+
+    test "honours a flat limit, not only one nested under payload (regression)" do
+      # The consumer's request/reply path merges the body at the top level, so a
+      # surface's `{"limit": 20}` arrives as `%{"limit" => 20}` and never as
+      # `%{"payload" => ...}`. Reading only "payload" ignored every such limit
+      # and answered with the default ten.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout("a", "user-1", "2026-01-04"), workout("b", "user-1", "2026-01-03")]}
+      end)
+
+      response =
+        BotArmyFitness.Handlers.WorkoutHandler.list_response(%{
+          "event" => "fitness.workout.list",
+          "tenant_id" => "00000000-0000-0000-0000-000000000001",
+          "user_id" => "user-1",
+          "limit" => 1
+        })
+
+      assert response["limit"] == 1
+      assert response["count"] == 1
+      assert Enum.map(response["workouts"], & &1["id"]) == ["a"]
     end
 
     test "handle_list/2 is silent when there is no reply subject" do

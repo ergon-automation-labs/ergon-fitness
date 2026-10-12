@@ -41,6 +41,11 @@ defmodule BotArmyFitness.NATS.Consumer do
   @subjects [
     %{subject: "fitness.workout.log", type: :request_reply, description: "Log workout"},
     %{subject: "fitness.workout.list", type: :request_reply, description: "List recent workouts"},
+    %{
+      subject: "fitness.workout.options",
+      type: :request_reply,
+      description: "The activities and intensities a picker may offer"
+    },
     %{subject: "fitness.goal.set", type: :subscribe, description: "Set fitness goal"},
     %{subject: "fitness.goal.update", type: :subscribe, description: "Update fitness goal"},
     %{subject: "fitness.goal.progress", type: :subscribe, description: "Report goal progress"},
@@ -258,6 +263,12 @@ defmodule BotArmyFitness.NATS.Consumer do
 
       "fitness.workout.list" ->
         BotArmyFitness.Handlers.WorkoutHandler.handle_list(message, nats_msg.reply_to)
+
+      "fitness.workout.options" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.WorkoutHandler.handle_options(message)
+        )
 
       "fitness.goal.set" ->
         BotArmyFitness.Handlers.GoalHandler.handle_set(message)

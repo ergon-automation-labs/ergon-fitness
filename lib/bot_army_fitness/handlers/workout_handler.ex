@@ -5,6 +5,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   This module processes incoming workout messages:
   - `fitness.workout.log` - Log a completed workout
   - `fitness.workout.list` - List recent workouts
+  - `fitness.workout.options` - The activities and intensities a picker may offer
 
   Each operation validates the input and publishes response events.
 
@@ -22,6 +23,26 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
   alias BotArmyFitness.WorkoutTypes
   alias BotArmyLibraryRuntime.NATS.Reply
+
+  @doc """
+  The options a picker may offer: the activities and the intensities.
+
+  This verb exists so no surface has to hold its own copy of the vocabulary.
+  `fitness.workout.log` accepts free text and folds what it does not know onto
+  `"other"`, so a surface that invented its own list would still be able to
+  write — it would simply write a word that folds, and the two screens would
+  disagree about what a workout is. The values here are `WorkoutTypes.types/0`
+  and `WorkoutTypes.intensities/0`, and the labels are the bot's own words.
+
+  Answers with an already-encoded `Reply`, like `handle_log/1`, so the consumer's
+  clause is one line either way.
+  """
+  def handle_options(_message \\ %{}) do
+    Reply.ok(%{
+      "workout_types" => WorkoutTypes.type_options(),
+      "intensities" => WorkoutTypes.intensity_options()
+    })
+  end
 
   @doc """
   Handle workout list request.
@@ -45,10 +66,15 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   or unexpected read degrades to an empty list instead of raising, because an
   exception here terminates the consumer process and drops every fitness
   subscription with it.
+
+  The request's fields are read with the same two-shape rule as `handle_log/1`:
+  an envelope leaves them under `"payload"`, and a flat request/reply body puts
+  them at the top level. Reading only `"payload"` meant a flat request's `limit`
+  was silently ignored and every call answered with the default ten.
   """
   def list_response(message) do
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
-    payload = message["payload"] || %{}
+    payload = message["payload"] || message
     limit = Map.get(payload, "limit", 10)
 
     workouts =
