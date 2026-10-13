@@ -115,6 +115,89 @@ defmodule BotArmyFitness.SchedulerTest do
     end
   end
 
+  describe "days_since_last_workout/0" do
+    test "reports the day count for the most recent workout" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, [workout(days_ago(4))]} end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 4}
+    end
+
+    test "reports a workout logged today as zero days" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, [workout(days_ago(0))]} end)
+
+      # The reminder cycle filters 0 out (there is nothing to nag about), but the
+      # fact itself must still say 0: the social check-in asks a different question,
+      # and "today" is exactly the answer that keeps the invitation quiet.
+      assert Scheduler.days_since_last_workout() == {:ok, 0}
+    end
+
+    test "reports the never-worked-out sentinel when nothing is on record" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 999}
+    end
+
+    test "picks the newest date regardless of day-of-month ordering" do
+      older = ~D[2026-08-31]
+      newer = ~D[2026-09-01]
+
+      # Pinning "today" here would make this test rot; the property that matters is
+      # that the newer Gregorian day wins, whatever it is relative to now.
+      expected = Date.diff(Date.utc_today(), newer)
+
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout_on(older), workout_on(newer)]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, expected}
+    end
+
+    test "handles workout dates stored as ISO strings" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout_string(days_ago(4))]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 4}
+    end
+
+    test "a failed store read is an error, never 'no workouts'" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:error, :timeout} end)
+
+      # The store's own reason is preserved so the caller can log what happened.
+      assert Scheduler.days_since_last_workout() == {:error, :timeout}
+    end
+
+    test "a raising store read is an error, not a crash in the caller" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> raise "db down" end)
+
+      assert {:error, %RuntimeError{}} = Scheduler.days_since_last_workout()
+    end
+
+    test "survives an unexpected store reply" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, :not_a_list} end)
+
+      assert {:error, {:unexpected_store_reply, {:ok, :not_a_list}}} =
+               Scheduler.days_since_last_workout()
+    end
+
+    test "an unreadable date is never-worked-out, never today" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [%{"id" => "w-1", "date" => "not-a-date"}]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 999}
+    end
+
+    test "reads the workouts of the default tenant" do
+      expect(BotArmyFitness.WorkoutStoreMock, :list, fn tenant ->
+        assert tenant == BotArmyLibraryCore.Tenant.default_tenant_id()
+        {:ok, []}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 999}
+    end
+  end
+
   defp stub_stores(goals, workouts) do
     stub(BotArmyFitness.GoalStoreMock, :list, fn _tenant -> goals end)
     stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, workouts} end)

@@ -11,6 +11,8 @@ defmodule BotArmyFitness.PulsePublisher do
   use GenServer
   require Logger
 
+  alias BotArmyFitness.Scheduler
+
   @health_interval_ms 30 * 1000
 
   def start_link(opts) do
@@ -82,23 +84,7 @@ defmodule BotArmyFitness.PulsePublisher do
   end
 
   defp publish_pulse(metrics) do
-    health_signal =
-      if metrics.workouts > 0 or metrics.streak_days > 0, do: "nominal", else: "degraded"
-
-    payload = %{
-      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
-      "service" => "fitness",
-      "health_signal" => health_signal,
-      "metrics" => %{
-        "workouts" => metrics.workouts,
-        "streak_days" => metrics.streak_days,
-        "active_goals" => metrics.active_goals
-      },
-      "observations" => %{
-        "idle_minutes" => if(metrics.workouts == 0, do: 60, else: 0),
-        "streak_at_risk" => if(metrics.streak_days > 0 and metrics.workouts == 0, do: 1, else: 0)
-      }
-    }
+    payload = build_pulse_payload(metrics)
 
     subject = "bot.fitness.pulse"
 
@@ -114,6 +100,50 @@ defmodule BotArmyFitness.PulsePublisher do
     e ->
       Logger.error("[PulsePublisher] Error: #{inspect(e)}")
       %{}
+  end
+
+  @doc false
+  # The pulse body, split out from the publish so the observations — including the
+  # store-derived `days_since_workout` — can be asserted without a broker.
+  def build_pulse_payload(metrics) do
+    health_signal =
+      if metrics.workouts > 0 or metrics.streak_days > 0, do: "nominal", else: "degraded"
+
+    %{
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "service" => "fitness",
+      "health_signal" => health_signal,
+      "metrics" => %{
+        "workouts" => metrics.workouts,
+        "streak_days" => metrics.streak_days,
+        "active_goals" => metrics.active_goals
+      },
+      "observations" => observations(metrics)
+    }
+  end
+
+  defp observations(metrics) do
+    counters = %{
+      "idle_minutes" => if(metrics.workouts == 0, do: 60, else: 0),
+      "streak_at_risk" => if(metrics.streak_days > 0 and metrics.workouts == 0, do: 1, else: 0)
+    }
+
+    # `days_since_workout` is a store fact, never a counter: the counters above are
+    # reset on every restart, so a restart would silently report "worked out today".
+    # The read lives in Scheduler, which also owns the never-worked-out sentinel.
+    #
+    # A failed read OMITS the key rather than inventing a value: an invented 0 reads
+    # as "today" and an invented 999 reads as "never", and this observation gates a
+    # social invitation. `IntentEvaluator.extract_observations/1` treats an absent
+    # key as 0 days, so a store outage stays quiet instead of nagging.
+    case Scheduler.days_since_last_workout() do
+      {:ok, days} ->
+        Map.put(counters, "days_since_workout", days)
+
+      {:error, reason} ->
+        Logger.warning("[PulsePublisher] days_since_workout omitted: #{inspect(reason)}")
+        counters
+    end
   end
 
   defp maybe_publish_tavern_gossip(metrics) do

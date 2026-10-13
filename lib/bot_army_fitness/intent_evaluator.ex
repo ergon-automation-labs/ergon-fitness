@@ -5,6 +5,7 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   require Logger
 
+  alias BotArmyFitness.Scheduler
   alias BotArmyLibraryRuntime.Intent.AccumulatedContext
   alias BotArmyLibraryRuntime.Intent.ActionHandler
   alias BotArmyLibraryRuntime.Intent.DeferHandler
@@ -207,31 +208,57 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   @doc false
   def handle_propose_social_check_in_action(bot_name, _action, _intent_id, details, _endorsements) do
-    days = Map.get(details, :days_since_workout, 0)
     score = Map.get(details, :score, 0.5)
 
-    if days >= 3 do
-      message = %{
-        "event_id" => UUID.uuid4(),
-        "event" => "gossip.social.invite",
-        "schema_version" => "1.0",
-        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "source" => "bot_army_fitness",
-        "tenant_id" => BotArmyLibraryRuntime.Tenant.default_tenant_id(),
-        "conversation_id" => UUID.uuid4(),
-        "payload" => %{
-          "from_bot" => bot_name,
-          "to_bot" => "gtd_bot",
-          "topic" => "streak_at_risk",
-          "adaptive_score" => score,
-          "cooldown_seconds" => 86_400,
-          "days_since_workout" => days
-        }
-      }
+    # `days_since_workout` is NOT a threshold criterion, so it is not in `details`:
+    # ThresholdModel only carries the criteria it scored, under `:threshold_breakdown`.
+    # It is a store fact, so ask the module that already owns the read — and let a
+    # failed read stay quiet rather than inviting someone because a hiccup looked
+    # like a streak of misses.
+    case Scheduler.days_since_last_workout() do
+      {:ok, days} when days >= 3 ->
+        message = social_check_in_message(bot_name, days, score)
 
-      BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.social.invite", message)
-      Logger.info("[Fitness.Intent] Proposed social check-in to gtd_bot (days=#{days})")
+        BotArmyLibraryRuntime.NATS.Publisher.publish("gossip.social.invite", message)
+        Logger.info("[Fitness.Intent] Proposed social check-in to gtd_bot (days=#{days})")
+        :ok
+
+      {:ok, days} ->
+        Logger.debug("[Fitness.Intent] Social check-in not due (days=#{days})")
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "[Fitness.Intent] Social check-in skipped, workout store unreadable: #{inspect(reason)}"
+        )
+
+        {:error, reason}
     end
+  end
+
+  @doc false
+  # The invite body, pure so the payload can be asserted without a broker. The
+  # `days_since_workout` it carries is the real count of days since the most recent
+  # workout on record; before the metric existed this field was only ever written
+  # through a branch that could not be reached, so no message was ever sent.
+  def social_check_in_message(bot_name, days, score) do
+    %{
+      "event_id" => UUID.uuid4(),
+      "event" => "gossip.social.invite",
+      "schema_version" => "1.0",
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_fitness",
+      "tenant_id" => BotArmyLibraryRuntime.Tenant.default_tenant_id(),
+      "conversation_id" => UUID.uuid4(),
+      "payload" => %{
+        "from_bot" => bot_name,
+        "to_bot" => "gtd_bot",
+        "topic" => "streak_at_risk",
+        "adaptive_score" => score,
+        "cooldown_seconds" => 86_400,
+        "days_since_workout" => days
+      }
+    }
   end
 
   @doc false
