@@ -234,10 +234,14 @@ defmodule BotArmyFitness.IntentEvaluator do
     end
   end
 
-  defp workout_body(details) do
-    idle_min = Map.get(details, :idle_minutes, 0)
+  @doc false
+  def workout_body(details) do
+    # The criteria live under `:threshold_breakdown` (see ThresholdModel.build_details/4),
+    # never at the top level — so these reads used to default to 0 silently and the body
+    # always fell through to "Time for a workout?".
+    idle_min = get_in(details, [:threshold_breakdown, :idle_minutes, :value]) || 0
     hours = div(trunc(idle_min), 60)
-    streak = Map.get(details, :streak_at_risk, 0)
+    streak = get_in(details, [:threshold_breakdown, :streak_at_risk, :value]) || 0
 
     cond do
       streak > 0 ->
@@ -268,7 +272,10 @@ defmodule BotArmyFitness.IntentEvaluator do
 
   @doc false
   def build_suggest_workout_defer_prompt(action, details, context) do
-    idle_min = get_in(context, [:summary, :idle_minutes]) || 0
+    # `context.summary.idle_minutes` is an aggregate (%{count:, values:, latest:}), not a
+    # scalar — `trunc/1` on it raised ArgumentError and killed this GenServer on every
+    # deferred suggestion (232 crashes in the air log, stopping 2026-10-13).
+    idle_min = AccumulatedContext.latest_value(context, :idle_minutes)
 
     %{
       "text" =>
