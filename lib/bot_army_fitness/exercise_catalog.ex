@@ -19,9 +19,10 @@ defmodule BotArmyFitness.ExerciseCatalog do
                        offers (dumbbells step from 10 by 5; the kettlebell has seven
                        discrete settings, so its ladder is a list and not a step).
     * `"level"`      — the device's own resistance level. The MaxPRO dials a
-                       PowerClutch, not a weight stack: 50 levels, no continuous
-                       kilogram scale. Recording a "kg" for it would invent a number
-                       the device never showed.
+                       PowerClutch, not a weight stack: 25 levels, and the clutch
+                       stops there — it locks rather than continuing past 25. No
+                       continuous kilogram scale. Recording a "kg" for it would
+                       invent a number the device never showed.
     * `"bodyweight"` — the body is the load. A number, when one is recorded, is load
                        *added* (a belt) or *taken away* (an assist), so it is optional
                        and absent means the body alone.
@@ -52,13 +53,16 @@ defmodule BotArmyFitness.ExerciseCatalog do
   # The gym, in the order a picker should offer it. `load` is what a number means;
   # `min`/`step` and `settings` are the ladder the device actually has, and are absent
   # when the load is the body (there is no ladder for a pull-up).
+  #
+  # The MaxPRO's ladder tops out at 25: the PowerClutch locks at its last level rather
+  # than turning further, so 25 is the top of the range and not a round number.
   @equipment [
     %{
       "value" => "maxpro",
       "label" => "MaxPRO",
       "load" => @level,
       "min" => 1,
-      "max" => 50,
+      "max" => 25,
       "step" => 1
     },
     %{

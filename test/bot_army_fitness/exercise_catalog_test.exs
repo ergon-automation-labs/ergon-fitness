@@ -68,10 +68,11 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
     end
 
     test "the MaxPRO records a level, not a kilogram" do
-      # It dials a PowerClutch (50 levels), not a weight stack. Recording kg here
-      # would be a number the device never showed her.
+      # It dials a PowerClutch (25 levels), not a weight stack, and the clutch locks at
+      # its last level rather than turning further — so 25 is the top. Recording kg
+      # here would be a number the device never showed her.
       assert ExerciseCatalog.load_kind("maxpro") == "level"
-      assert ExerciseCatalog.load_settings("maxpro") == %{"min" => 1, "max" => 50, "step" => 1}
+      assert ExerciseCatalog.load_settings("maxpro") == %{"min" => 1, "max" => 25, "step" => 1}
     end
 
     test "the load kinds land on the pieces the house actually has" do
