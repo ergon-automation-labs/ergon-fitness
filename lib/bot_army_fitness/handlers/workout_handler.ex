@@ -5,7 +5,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   This module processes incoming workout messages:
   - `fitness.workout.log` - Log a completed workout
   - `fitness.workout.list` - List recent workouts
-  - `fitness.workout.options` - The activities and intensities a picker may offer
+  - `fitness.workout.options` - The activities, intensities, and home-gym equipment
+    and movements a picker may offer
 
   Each operation validates the input and publishes response events.
 
@@ -21,11 +22,12 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
 
   require Logger
 
+  alias BotArmyFitness.ExerciseCatalog
   alias BotArmyFitness.WorkoutTypes
   alias BotArmyLibraryRuntime.NATS.Reply
 
   @doc """
-  The options a picker may offer: the activities and the intensities.
+  The options a picker may offer: the activities, the intensities, and the gym.
 
   This verb exists so no surface has to hold its own copy of the vocabulary.
   `fitness.workout.log` accepts free text and folds what it does not know onto
@@ -34,13 +36,21 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   disagree about what a workout is. The values here are `WorkoutTypes.types/0`
   and `WorkoutTypes.intensities/0`, and the labels are the bot's own words.
 
+  The activities are coarse on purpose: the gym's own equipment and movements
+  arrive beside them, from `ExerciseCatalog`, because "strength" cannot name a
+  goblet squat and a home-gym menu has to. Each movement carries the activity it is
+  stored under, so a surface never maps one vocabulary onto the other itself — it
+  sends the movement's own word in `title` and the activity the bot attached to it.
+
   Answers with an already-encoded `Reply`, like `handle_log/1`, so the consumer's
   clause is one line either way.
   """
   def handle_options(_message \\ %{}) do
     Reply.ok(%{
       "workout_types" => WorkoutTypes.type_options(),
-      "intensities" => WorkoutTypes.intensity_options()
+      "intensities" => WorkoutTypes.intensity_options(),
+      "equipment" => ExerciseCatalog.equipment(),
+      "exercises" => ExerciseCatalog.exercise_options()
     })
   end
 
