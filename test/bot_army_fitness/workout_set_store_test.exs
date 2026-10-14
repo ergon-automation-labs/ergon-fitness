@@ -28,6 +28,8 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
       assert function_exported?(WorkoutSetStore, :create, 1)
       assert function_exported?(WorkoutSetStore, :recent, 2)
       assert function_exported?(WorkoutSetStore, :for_exercise, 3)
+      assert function_exported?(WorkoutSetStore, :newest_per_exercise, 2)
+      assert function_exported?(WorkoutSetStore, :distinct_days, 1)
     end
   end
 
@@ -53,9 +55,22 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
              from the day she typed it in, not the day she trained.
              """
 
-      assert length(String.split(source, "order_by([s], desc: s.date, desc: s.inserted_at)")) ==
-               3,
-             "expected both reads (recent/2 and for_exercise/3) to be date-ordered"
+      # Three occurrences of the ordering clause, so `split` yields four parts.
+      assert length(String.split(source, "desc: s.date, desc: s.inserted_at)")) == 4,
+             """
+             expected all three reads that return rows — recent/2, for_exercise/3 and
+             newest_per_exercise/2 — to be ordered by the set's own day. A read that is
+             not is how a backfilled older day becomes "last time" or a second training
+             day. distinct_days/1 is not in this count because it returns days, not rows:
+             the database does the deduping, so there is no row to order.
+             """
+
+      assert String.contains?(source, "distinct([s], s.date)"),
+             """
+             distinct_days/1 no longer asks the database to dedupe by day. Counting the
+             days in Elixir instead would make the answer grow with her log, and a day
+             she logged twice would count as two training days.
+             """
     end
   end
 
@@ -73,6 +88,16 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
       assert_raise RuntimeError, ~r/Ecto repo/, fn ->
         WorkoutSetStore.for_exercise(@tenant, "kb_swing")
       end
+    end
+
+    test "newest_per_exercise/2 cannot answer without the database" do
+      assert_raise RuntimeError, ~r/Ecto repo/, fn ->
+        WorkoutSetStore.newest_per_exercise(@tenant, ["kb_swing"])
+      end
+    end
+
+    test "distinct_days/1 cannot answer without the database" do
+      assert_raise RuntimeError, ~r/Ecto repo/, fn -> WorkoutSetStore.distinct_days(@tenant) end
     end
   end
 end

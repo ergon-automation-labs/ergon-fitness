@@ -30,6 +30,8 @@ defmodule BotArmyFitness.WorkoutSetStore do
   - `create/1` — store one set
   - `recent/2` — a tenant's sets, newest first (limit)
   - `for_exercise/3` — one movement's sets, newest first (limit)
+  - `newest_per_exercise/2` — the newest set of each of several movements, in one read
+  - `distinct_days/1` — the days she trained, one per day
   - `clear/0` — delete every set (tests and tooling; genuinely destructive)
   """
 
@@ -104,6 +106,50 @@ defmodule BotArmyFitness.WorkoutSetStore do
      |> limit(^normalise_limit(limit))
      |> Repo.all()
      |> Enum.map(&schema_to_map/1)}
+  end
+
+  @doc """
+  The newest set of each of several movements, in one read — `%{movement => [set]}`.
+
+  The coach asks about a whole session at once (four to six slots, each offering several
+  movements), and asking one query per movement would be twenty-odd round trips for a
+  question the database can answer in one. `DISTINCT ON` needs the leftmost `ORDER BY`
+  term to be the distinct expression, which is what pins the row that survives to the
+  same one `for_exercise/3` would return: the newest day, then the newest row.
+
+  A movement with no sets is simply absent from the map; the caller does not get an
+  empty list for it, because "no sets" and "no movement" are the same answer here.
+  """
+  @impl true
+  def newest_per_exercise(tenant_id, exercises)
+      when is_binary(tenant_id) and is_list(exercises) do
+    {:ok,
+     WorkoutSet
+     |> where([s], s.tenant_id == ^tenant_id and s.exercise in ^exercises)
+     |> order_by([s], asc: s.exercise, desc: s.date, desc: s.inserted_at)
+     |> distinct([s], s.exercise)
+     |> Repo.all()
+     |> Enum.map(&schema_to_map/1)
+     |> Map.new(&{&1["exercise"], [&1]})}
+  end
+
+  @doc """
+  The days she trained, as dates — one per day, however many sets that day held.
+
+  The database counts the days rather than the caller counting rows, so the answer does
+  not grow with her log. A day is a `date` column, which the store writes as the day the
+  set happened (`Date.utc_today()` when the caller does not say), the same convention the
+  scheduler counts from.
+  """
+  @impl true
+  def distinct_days(tenant_id) when is_binary(tenant_id) do
+    {:ok,
+     WorkoutSet
+     |> where([s], s.tenant_id == ^tenant_id)
+     |> distinct([s], s.date)
+     |> select([s], s.date)
+     |> Repo.all()
+     |> Enum.reject(&is_nil/1)}
   end
 
   @doc """

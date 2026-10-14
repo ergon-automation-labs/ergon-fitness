@@ -116,6 +116,33 @@ Deployment happens after:
 
 ---
 
+## The rules this bot keeps
+
+Six of these are load-bearing; changing one silently changes coaching advice, so a change
+here is a change to what her body is told to do:
+
+1. **A movement is not a workout, and a set is not a workout log.** `fitness.workout.log`
+   is length × hardness; a set is a load and a count and has its own verb, table and
+   store (`fitness.set.record` / `fitness.set.list`).
+2. **A load that is not a setting the equipment really has is refused, never rounded.**
+   Rounding records a set that never happened and the next read builds a progression on a
+   weight that is not in the room.
+3. **The bot owns the vocabulary.** `ExerciseCatalog` holds the gym, the muscle groups and
+   the movements; a surface draws them and keeps no copy.
+4. **A failed read is a refusal, never an empty history.** `read_failed` covers an
+   unreadable set log, day count or history — "she has logged nothing" and "nobody could
+   read the log" are different sentences, and only one of them is safe to print.
+5. **The coach is pure and chooses nothing for her.** `BotArmyFitness.Coach` reads no store
+   and no clock; its rotation turns on training days (not the calendar), and every
+   movement travels with her own `next` number beside it. `recent` names a fact from her
+   log, not a pick. Progression is `BotArmyFitness.Progression`'s — do not re-derive it
+   here or on a surface.
+6. **`fitness.workout.today` is superseded, not deleted.** It answers a workout *type*
+   derived from a user-id hash and the day of the year. New callers want
+   `fitness.coach.today`; do not grow the old plan a catalog.
+
+---
+
 ## Related Repositories
 
 - `bot_army_schemas_fitness` - Fitness message schemas

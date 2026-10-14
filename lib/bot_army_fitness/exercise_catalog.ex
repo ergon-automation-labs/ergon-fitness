@@ -33,6 +33,23 @@ defmodule BotArmyFitness.ExerciseCatalog do
   of adding a "reasonable" kilogram — `BotArmyFitness.Progression`'s job, not this
   module's.
 
+  ## What a movement works, in one vocabulary
+
+  Every movement carries a `"muscles"` map naming what it works, drawn from a fixed list
+  of groups (`group_options/0`): `"main"` is what the movement is for, `"also"` is what
+  comes along. Free words per movement would have been the fifth vocabulary to disagree —
+  "rear delts", "rear shoulders" and "posterior deltoid" are one group spelled three
+  ways, and *did this session reach every group* cannot be asked in three vocabularies.
+
+  With every movement tagged, "as much as we can for the machines provided" stops being
+  a claim and becomes a read: `uncovered_groups/0` names the groups nothing here reaches
+  (currently none) and `groups_without_a_primary_mover/0` names the ones only ever worked
+  in a supporting role (currently the lower back and the hip flexors — every hinge loads
+  the first and every leg raise loads the second, and no movement here leads with either,
+  because a back extension bench and a dedicated hip-flexor movement are things this house
+  does not own). The second list is reported rather than closed: padding it would mean
+  describing equipment the house does not have.
+
   ## Nothing here is a score
 
   The catalog is a menu of what the gym makes possible, with a rep range per movement
@@ -95,10 +112,50 @@ defmodule BotArmyFitness.ExerciseCatalog do
     %{"value" => "pull_up_bar", "label" => "Pull-up bar", "load" => @bodyweight}
   ]
 
+  # The muscle groups this gym can reach, in the order a person would read a body:
+  # chest and shoulders, back, arms, middle, legs. A *fixed* vocabulary rather than
+  # free words per movement, for the reason five copies of the activity vocabulary had
+  # to be retired: "rear delts", "rear shoulders" and "posterior deltoid" are one group
+  # spelled three ways, and a coverage question asked in three vocabularies cannot be
+  # answered. Every `muscles` entry in `@exercises` below is drawn from this list, and
+  # the test suite says so out loud.
+  #
+  # The list is what the equipment can *reach*, not what a textbook contains: there is
+  # no `adductors`, because nothing here isolates them, and there is a `lower_back`,
+  # because the hinges load it whether or not anyone presses a button for it.
+  @groups [
+    %{"value" => "chest", "label" => "chest"},
+    %{"value" => "front_delts", "label" => "front shoulders"},
+    %{"value" => "side_delts", "label" => "side shoulders"},
+    %{"value" => "rear_delts", "label" => "rear shoulders"},
+    %{"value" => "lats", "label" => "lats"},
+    %{"value" => "upper_back", "label" => "upper back"},
+    %{"value" => "traps", "label" => "traps"},
+    %{"value" => "lower_back", "label" => "lower back"},
+    %{"value" => "biceps", "label" => "biceps"},
+    %{"value" => "triceps", "label" => "triceps"},
+    %{"value" => "forearms", "label" => "grip and forearms"},
+    %{"value" => "abs", "label" => "abs"},
+    %{"value" => "obliques", "label" => "obliques"},
+    %{"value" => "hip_flexors", "label" => "hip flexors"},
+    %{"value" => "glutes", "label" => "glutes"},
+    %{"value" => "quads", "label" => "quads"},
+    %{"value" => "hamstrings", "label" => "hamstrings"},
+    %{"value" => "calves", "label" => "calves"}
+  ]
+
   # The movements, grouped by the equipment they belong to. `activity` is the
   # `WorkoutTypes` value the row is stored under (the exercise name itself is kept in
   # the row's title, exactly as a free-text log keeps the sender's own word), `measure`
   # is what the range counts, and the range is the window worth working in.
+  #
+  # `muscles` is what the movement works, in the vocabulary of `@groups` above: `main`
+  # is what it is for and `also` is what comes along. The two tiers are not a ranking —
+  # a movement's helpers are not lesser movements, they are the same movement seen from
+  # the other side — but they answer different questions: "which movements would I press
+  # for my side shoulders" reads `main`, and "did today's session reach my triceps at all"
+  # reads both. Nothing here is a score, and nothing here is a programme: this is what
+  # the movement *works*, never how much of it is worth doing.
   @exercises [
     %{
       "value" => "cable_chest_press",
@@ -107,25 +164,18 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["chest"], "also" => ["front_delts", "triceps"]}
     },
     %{
-      "value" => "cable_row",
-      "label" => "Seated cable row",
+      "value" => "cable_fly",
+      "label" => "Cable fly",
       "equipment" => "maxpro",
       "activity" => "strength",
       "measure" => "reps",
-      "min" => 8,
-      "max" => 12
-    },
-    %{
-      "value" => "lat_pulldown",
-      "label" => "Lat pulldown",
-      "equipment" => "maxpro",
-      "activity" => "strength",
-      "measure" => "reps",
-      "min" => 8,
-      "max" => 12
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["chest"], "also" => ["front_delts"]}
     },
     %{
       "value" => "cable_shoulder_press",
@@ -134,7 +184,28 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["front_delts"], "also" => ["triceps", "side_delts"]}
+    },
+    %{
+      "value" => "cable_lateral_raise",
+      "label" => "Cable lateral raise",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["side_delts"], "also" => ["traps"]}
+    },
+    %{
+      "value" => "cable_upright_row",
+      "label" => "Cable upright row",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["side_delts"], "also" => ["traps", "upper_back"]}
     },
     %{
       "value" => "triceps_pushdown",
@@ -143,7 +214,68 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 10,
-      "max" => 15
+      "max" => 15,
+      "muscles" => %{"main" => ["triceps"], "also" => []}
+    },
+    %{
+      "value" => "cable_overhead_triceps",
+      "label" => "Overhead triceps extension",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["triceps"], "also" => []}
+    },
+    %{
+      "value" => "lat_pulldown",
+      "label" => "Lat pulldown",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["lats"], "also" => ["upper_back", "biceps"]}
+    },
+    %{
+      "value" => "cable_row",
+      "label" => "Seated cable row",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["upper_back", "lats"], "also" => ["biceps", "rear_delts"]}
+    },
+    %{
+      "value" => "cable_face_pull",
+      "label" => "Cable face pull",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 12,
+      "max" => 20,
+      "muscles" => %{"main" => ["rear_delts"], "also" => ["upper_back", "traps"]}
+    },
+    %{
+      "value" => "cable_reverse_fly",
+      "label" => "Cable reverse fly",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["rear_delts"], "also" => ["upper_back"]}
+    },
+    %{
+      "value" => "cable_shrug",
+      "label" => "Cable shrug",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["traps"], "also" => ["forearms"]}
     },
     %{
       "value" => "cable_curl",
@@ -152,7 +284,48 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 10,
-      "max" => 15
+      "max" => 15,
+      "muscles" => %{"main" => ["biceps"], "also" => ["forearms"]}
+    },
+    %{
+      "value" => "cable_crunch",
+      "label" => "Cable crunch",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["abs"], "also" => ["obliques"]}
+    },
+    %{
+      "value" => "cable_woodchop",
+      "label" => "Cable woodchop",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["obliques"], "also" => ["abs"]}
+    },
+    %{
+      "value" => "cable_pull_through",
+      "label" => "Cable pull-through",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["glutes"], "also" => ["hamstrings", "lower_back"]}
+    },
+    %{
+      "value" => "cable_glute_kickback",
+      "label" => "Cable glute kickback",
+      "equipment" => "maxpro",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["glutes"], "also" => ["hamstrings"]}
     },
     %{
       "value" => "goblet_squat",
@@ -161,25 +334,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
-    },
-    %{
-      "value" => "one_arm_row",
-      "label" => "One-arm row",
-      "equipment" => "dumbbells",
-      "activity" => "strength",
-      "measure" => "reps",
-      "min" => 8,
-      "max" => 12
-    },
-    %{
-      "value" => "floor_press",
-      "label" => "Floor press",
-      "equipment" => "dumbbells",
-      "activity" => "strength",
-      "measure" => "reps",
-      "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["quads", "glutes"], "also" => ["abs", "upper_back"]}
     },
     %{
       "value" => "split_squat",
@@ -188,7 +344,48 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["quads", "glutes"], "also" => ["hamstrings", "abs"]}
+    },
+    %{
+      "value" => "bulgarian_split_squat",
+      "label" => "Bulgarian split squat",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["quads", "glutes"], "also" => ["hamstrings", "abs"]}
+    },
+    %{
+      "value" => "reverse_lunge",
+      "label" => "Reverse lunge",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["quads", "glutes"], "also" => ["hamstrings", "abs"]}
+    },
+    %{
+      "value" => "calf_raise",
+      "label" => "Standing calf raise",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 12,
+      "max" => 20,
+      "muscles" => %{"main" => ["calves"], "also" => []}
+    },
+    %{
+      "value" => "floor_press",
+      "label" => "Floor press",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["chest"], "also" => ["triceps", "front_delts"]}
     },
     %{
       "value" => "overhead_press",
@@ -197,7 +394,88 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["front_delts"], "also" => ["triceps", "side_delts", "abs"]}
+    },
+    %{
+      "value" => "one_arm_row",
+      "label" => "One-arm row",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["lats", "upper_back"], "also" => ["biceps", "forearms"]}
+    },
+    %{
+      "value" => "lateral_raise",
+      "label" => "Lateral raise",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["side_delts"], "also" => ["traps"]}
+    },
+    %{
+      "value" => "rear_delt_fly",
+      "label" => "Bent-over rear delt fly",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["rear_delts"], "also" => ["upper_back"]}
+    },
+    %{
+      "value" => "dumbbell_shrug",
+      "label" => "Dumbbell shrug",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["traps"], "also" => ["forearms"]}
+    },
+    %{
+      "value" => "dumbbell_curl",
+      "label" => "Dumbbell curl",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["biceps"], "also" => ["forearms"]}
+    },
+    %{
+      "value" => "hammer_curl",
+      "label" => "Hammer curl",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["biceps"], "also" => ["forearms"]}
+    },
+    %{
+      "value" => "reverse_curl",
+      "label" => "Reverse curl",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["forearms"], "also" => ["biceps"]}
+    },
+    %{
+      "value" => "dumbbell_overhead_triceps",
+      "label" => "Seated overhead triceps extension",
+      "equipment" => "dumbbells",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 10,
+      "max" => 15,
+      "muscles" => %{"main" => ["triceps"], "also" => []}
     },
     %{
       "value" => "kb_swing",
@@ -206,7 +484,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 10,
-      "max" => 15
+      "max" => 15,
+      "muscles" => %{
+        "main" => ["glutes", "hamstrings"],
+        "also" => ["lower_back", "abs", "forearms"]
+      }
     },
     %{
       "value" => "kb_clean_press",
@@ -215,7 +497,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 5,
-      "max" => 8
+      "max" => 8,
+      "muscles" => %{
+        "main" => ["front_delts"],
+        "also" => ["glutes", "quads", "abs", "forearms"]
+      }
     },
     %{
       "value" => "kb_row",
@@ -224,7 +510,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["lats", "upper_back"], "also" => ["biceps", "forearms"]}
     },
     %{
       "value" => "kb_romanian_deadlift",
@@ -233,7 +520,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{
+        "main" => ["hamstrings", "glutes"],
+        "also" => ["lower_back", "forearms"]
+      }
     },
     %{
       "value" => "kb_halo",
@@ -242,7 +533,31 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 12
+      "max" => 12,
+      "muscles" => %{"main" => ["side_delts"], "also" => ["abs"]}
+    },
+    %{
+      "value" => "kb_suitcase_carry",
+      "label" => "Suitcase carry",
+      "equipment" => "kettlebell",
+      "activity" => "strength",
+      "measure" => "seconds",
+      "min" => 20,
+      "max" => 45,
+      "muscles" => %{"main" => ["obliques"], "also" => ["forearms", "abs", "traps"]}
+    },
+    %{
+      "value" => "kb_turkish_get_up",
+      "label" => "Turkish get-up",
+      "equipment" => "kettlebell",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 3,
+      "max" => 6,
+      "muscles" => %{
+        "main" => ["abs", "side_delts"],
+        "also" => ["glutes", "quads", "forearms", "upper_back"]
+      }
     },
     %{
       "value" => "dip",
@@ -251,25 +566,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 5,
-      "max" => 10
-    },
-    %{
-      "value" => "l_sit",
-      "label" => "L-sit hold",
-      "equipment" => "dip_bars",
-      "activity" => "strength",
-      "measure" => "seconds",
-      "min" => 15,
-      "max" => 45
-    },
-    %{
-      "value" => "supported_knee_raise",
-      "label" => "Supported knee raise",
-      "equipment" => "dip_bars",
-      "activity" => "strength",
-      "measure" => "reps",
-      "min" => 8,
-      "max" => 15
+      "max" => 10,
+      "muscles" => %{"main" => ["chest", "triceps"], "also" => ["front_delts"]}
     },
     %{
       "value" => "dip_hold_top",
@@ -278,7 +576,48 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "seconds",
       "min" => 15,
-      "max" => 45
+      "max" => 45,
+      "muscles" => %{"main" => ["chest", "triceps"], "also" => ["front_delts"]}
+    },
+    %{
+      "value" => "dip_bar_push_up",
+      "label" => "Dip-bar push-up",
+      "equipment" => "dip_bars",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["chest"], "also" => ["triceps", "front_delts"]}
+    },
+    %{
+      "value" => "inverted_row",
+      "label" => "Inverted row",
+      "equipment" => "dip_bars",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["upper_back"], "also" => ["lats", "biceps", "forearms"]}
+    },
+    %{
+      "value" => "supported_knee_raise",
+      "label" => "Supported knee raise",
+      "equipment" => "dip_bars",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 15,
+      "muscles" => %{"main" => ["abs"], "also" => ["hip_flexors"]}
+    },
+    %{
+      "value" => "l_sit",
+      "label" => "L-sit hold",
+      "equipment" => "dip_bars",
+      "activity" => "strength",
+      "measure" => "seconds",
+      "min" => 15,
+      "max" => 45,
+      "muscles" => %{"main" => ["abs"], "also" => ["hip_flexors", "quads", "triceps"]}
     },
     %{
       "value" => "pull_up",
@@ -287,7 +626,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 5,
-      "max" => 10
+      "max" => 10,
+      "muscles" => %{
+        "main" => ["lats", "upper_back"],
+        "also" => ["biceps", "forearms", "abs"]
+      }
     },
     %{
       "value" => "chin_up",
@@ -296,7 +639,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 5,
-      "max" => 10
+      "max" => 10,
+      "muscles" => %{"main" => ["biceps", "lats"], "also" => ["upper_back", "forearms"]}
     },
     %{
       "value" => "negative_pull_up",
@@ -305,7 +649,18 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 3,
-      "max" => 6
+      "max" => 6,
+      "muscles" => %{"main" => ["lats", "upper_back"], "also" => ["biceps", "forearms"]}
+    },
+    %{
+      "value" => "scapular_pull_up",
+      "label" => "Scapular pull-up",
+      "equipment" => "pull_up_bar",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 12,
+      "muscles" => %{"main" => ["lats"], "also" => ["upper_back", "traps", "forearms"]}
     },
     %{
       "value" => "hanging_knee_raise",
@@ -314,7 +669,18 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "reps",
       "min" => 8,
-      "max" => 15
+      "max" => 15,
+      "muscles" => %{"main" => ["abs"], "also" => ["hip_flexors", "forearms"]}
+    },
+    %{
+      "value" => "hanging_leg_raise",
+      "label" => "Hanging leg raise",
+      "equipment" => "pull_up_bar",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 15,
+      "muscles" => %{"main" => ["abs"], "also" => ["hip_flexors", "forearms"]}
     },
     %{
       "value" => "dead_hang",
@@ -323,7 +689,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "activity" => "strength",
       "measure" => "seconds",
       "min" => 20,
-      "max" => 60
+      "max" => 60,
+      "muscles" => %{"main" => ["forearms"], "also" => ["lats", "upper_back"]}
     }
   ]
 
@@ -375,6 +742,35 @@ defmodule BotArmyFitness.ExerciseCatalog do
       %{"load" => @bodyweight} -> nil
       %{} = equipment -> Map.drop(equipment, ["value", "label", "load"])
       nil -> nil
+    end
+  end
+
+  @doc """
+  The muscle groups this gym can reach, as `value`/`label` pairs.
+
+  A fixed vocabulary and not free words, because "rear delts", "rear shoulders" and
+  "posterior deltoid" are one group spelled three ways, and a question asked in three
+  vocabularies — *did this session reach every group* — cannot be answered. The list is
+  what the four pieces can reach rather than what a textbook contains: no `adductors`,
+  because nothing here isolates them, and a `lower_back`, because the hinges load it.
+  """
+  @spec group_options() :: [%{String.t() => String.t()}]
+  def group_options, do: Enum.map(@groups, &Map.take(&1, ["value", "label"]))
+
+  @doc "The muscle-group values, in reading order."
+  @spec groups() :: [String.t()]
+  def groups, do: Enum.map(@groups, & &1["value"])
+
+  @doc "Whether a value names a muscle group in this vocabulary."
+  @spec group_value?(term()) :: boolean()
+  def group_value?(value), do: Enum.any?(@groups, &(&1["value"] == value))
+
+  @doc "The human words for a group, or `nil` for a value outside this vocabulary."
+  @spec group_label(term()) :: String.t() | nil
+  def group_label(value) do
+    case Enum.find(@groups, &(&1["value"] == value)) do
+      nil -> nil
+      group -> group["label"]
     end
   end
 
@@ -447,6 +843,70 @@ defmodule BotArmyFitness.ExerciseCatalog do
       exercise ->
         %{"measure" => exercise["measure"], "min" => exercise["min"], "max" => exercise["max"]}
     end
+  end
+
+  @doc """
+  What a movement works: `%{"main" => [...], "also" => [...]}`, or `nil` for a name
+  this gym does not have.
+
+  `main` is what the movement is for; `also` is what comes along. The two answer
+  different questions — *which movements would I press for my side shoulders* reads
+  `main`, and *did today reach my triceps at all* reads both — and neither is a score.
+  """
+  @spec muscles_for(term()) :: %{String.t() => [String.t()]} | nil
+  def muscles_for(value) do
+    case exercise(value) do
+      nil -> nil
+      exercise -> exercise["muscles"]
+    end
+  end
+
+  @doc """
+  Whether a movement works a muscle group, leading or helping.
+
+  `false` for a movement or a group this gym does not have. "Not in this vocabulary"
+  and "not worked" are the same answer to this question and are deliberately not
+  distinguished: a caller that has a group value it did not get from
+  `group_options/0` has a bug, not a movement to look up.
+  """
+  @spec works?(term(), term()) :: boolean()
+  def works?(movement, group) do
+    case muscles_for(movement) do
+      nil -> false
+      muscles -> group in muscles["main"] or group in muscles["also"]
+    end
+  end
+
+  @doc "The movements that lead with a group, in menu order."
+  @spec exercises_for_group(term()) :: [map()]
+  def exercises_for_group(group) do
+    Enum.filter(@exercises, &(group in &1["muscles"]["main"]))
+  end
+
+  @doc """
+  The groups no movement in this gym reaches at all — this list is empty, and the test
+  suite is what says so.
+
+  "As much as we can for the machines provided" is a claim, and this is the receipt: a
+  movement was added for every group, and what remains unwritten here is what the four
+  pieces genuinely cannot do.
+  """
+  @spec uncovered_groups() :: [String.t()]
+  def uncovered_groups do
+    Enum.reject(groups(), fn group -> Enum.any?(@exercises, &works?(&1["value"], group)) end)
+  end
+
+  @doc """
+  The groups no movement *leads* with, though something may help.
+
+  Reported rather than fixed by inventing a movement: a lower back is loaded by every
+  hinge this gym has and is nobody's prime mover without a back extension bench, which
+  is not here. A gym that padded this list would be describing equipment it does not
+  own.
+  """
+  @spec groups_without_a_primary_mover() :: [String.t()]
+  def groups_without_a_primary_mover do
+    Enum.reject(groups(), fn group -> exercises_for_group(group) != [] end)
   end
 
   @doc """

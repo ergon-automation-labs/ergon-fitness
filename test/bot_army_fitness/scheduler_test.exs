@@ -268,6 +268,94 @@ defmodule BotArmyFitness.SchedulerTest do
     end
   end
 
+  describe "training_days/0" do
+    # The rotation's input, and the same rule about what a set is: a day with three sets is
+    # one training day. Counted as a union and not as a sum, because a day she squatted and
+    # hiked is one day off the couch.
+    test "counts the days, not the rows, across both logs" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout(~D[2026-10-05])]}
+      end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant ->
+        # Two days of sets, three sets in all, one of them the day she also logged a
+        # workout. Four dates, three distinct days.
+        {:ok, [~D[2026-10-05], ~D[2026-10-08], ~D[2026-10-08]]}
+      end)
+
+      assert Scheduler.training_days() == {:ok, 2}
+    end
+
+    test "a day only the set log knows is a training day" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant ->
+        {:ok, [~D[2026-10-01], ~D[2026-10-03]]}
+      end)
+
+      assert Scheduler.training_days() == {:ok, 2}
+    end
+
+    test "nothing logged is zero days, which is a real answer" do
+      # Not a failure: a first session is the first session. The handler is what	turns
+      # this into "Push A" — and it only gets to do that because the read succeeded.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant -> {:ok, []} end)
+
+      assert Scheduler.training_days() == {:ok, 0}
+    end
+
+    test "a store that cannot answer is an error, never a shorter history" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant ->
+        {:error, :timeout}
+      end)
+
+      assert Scheduler.training_days() == {:error, :timeout}
+    end
+
+    test "a raising store is an error, not a crash in the caller" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant ->
+        raise "db down"
+      end)
+
+      assert {:error, %RuntimeError{}} = Scheduler.training_days()
+    end
+
+    test "an unexpected store reply is an error rather than an empty log" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant -> :no_reply end)
+
+      assert {:error, {:unexpected_store_reply, :no_reply}} = Scheduler.training_days()
+    end
+
+    test "a set-log day that is not a date is an error, not a day quietly dropped" do
+      # The store returns `Date` structs for the days it counted. Anything else means the
+      # seam changed, and a day silently dropped is a training day the rotation forgets.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant ->
+        {:ok, [~D[2026-10-01], "2026-10-03"]}
+      end)
+
+      assert Scheduler.training_days() == {:error, {:not_a_date, "2026-10-03"}}
+    end
+
+    test "reads the default tenant, the same one the reminders read" do
+      expect(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn tenant ->
+        assert tenant == BotArmyLibraryCore.Tenant.default_tenant_id()
+        {:ok, []}
+      end)
+
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      assert Scheduler.training_days() == {:ok, 0}
+    end
+  end
+
   defp stub_stores(goals, workouts, sets \\ []) do
     stub(BotArmyFitness.GoalStoreMock, :list, fn _tenant -> goals end)
     stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, workouts} end)

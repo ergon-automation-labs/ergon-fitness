@@ -133,6 +133,99 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       end
     end
 
+    test "every movement works at least one group, and none of them is a word of its own" do
+      for exercise <- ExerciseCatalog.exercises() do
+        muscles = ExerciseCatalog.muscles_for(exercise["value"])
+
+        assert is_map(muscles), "#{exercise["value"]} says nothing about what it works"
+        assert is_list(muscles["main"]) and is_list(muscles["also"])
+        assert muscles["main"] != [], "#{exercise["value"]} leads with nothing"
+
+        for group <- muscles["main"] ++ muscles["also"] do
+          assert ExerciseCatalog.group_value?(group),
+                 "#{exercise["value"]} works #{group}, which is not in the vocabulary"
+        end
+
+        assert muscles["main"] == Enum.uniq(muscles["main"])
+        assert muscles["also"] == Enum.uniq(muscles["also"])
+        assert Enum.all?(muscles["also"], &(&1 not in muscles["main"]))
+      end
+    end
+
+    test "no group is left unreached by any movement in the gym" do
+      # "As much as we can for the machines provided" is a claim about four pieces of
+      # equipment. This is the receipt, and it is empty: every group in the vocabulary has
+      # at least one movement here that works it. A group that appeared in this list would
+      # be a group the house cannot train, and the fix would be an edit to `@exercises` or
+      # an honest word in the docs — never a movement that cannot be performed.
+      assert ExerciseCatalog.uncovered_groups() == []
+    end
+
+    test "the groups no movement leads with are named, not padded away" do
+      # The lower back and the hip flexors are worked here and never led with: every hinge
+      # loads the first, every leg raise the second, and a movement that leads with either
+      # would need a back-extension bench or a hip-flexor machine, which this house does
+      # not own. Adding a movement to empty this list would describe equipment that is not
+      # here, so the list is reported instead.
+      assert ExerciseCatalog.groups_without_a_primary_mover() == ["lower_back", "hip_flexors"]
+
+      assert ExerciseCatalog.exercises_for_group("lower_back") == []
+
+      assert ExerciseCatalog.exercises_for_group("calves") |> Enum.map(& &1["value"]) ==
+               ["calf_raise"]
+    end
+
+    test "the vocabulary is one list, and it reads like a body" do
+      values = ExerciseCatalog.groups()
+
+      assert ExerciseCatalog.group_options() |> Enum.map(& &1["value"]) == values
+      assert values == Enum.uniq(values)
+      assert Enum.all?(values, &(&1 == String.downcase(&1)))
+
+      for pair <- ExerciseCatalog.group_options() do
+        assert is_binary(pair["label"]) and pair["label"] != ""
+        assert pair["label"] == String.downcase(pair["label"])
+      end
+
+      assert ExerciseCatalog.group_label("rear_delts") == "rear shoulders"
+      assert ExerciseCatalog.group_label("not_a_group") == nil
+      refute ExerciseCatalog.group_value?("rear_delts ")
+    end
+
+    test "what a movement works can be asked either way round" do
+      assert ExerciseCatalog.muscles_for("cable_chest_press") == %{
+               "main" => ["chest"],
+               "also" => ["front_delts", "triceps"]
+             }
+
+      assert ExerciseCatalog.muscles_for("not_a_movement") == nil
+
+      assert ExerciseCatalog.works?("cable_chest_press", "chest")
+      assert ExerciseCatalog.works?("cable_chest_press", "triceps")
+      refute ExerciseCatalog.works?("cable_chest_press", "lats")
+      refute ExerciseCatalog.works?("not_a_movement", "chest")
+      refute ExerciseCatalog.works?("cable_chest_press", "not_a_group")
+
+      assert ExerciseCatalog.exercises_for_group("chest") |> Enum.map(& &1["value"]) ==
+               ~w(cable_chest_press cable_fly floor_press dip dip_hold_top dip_bar_push_up)
+    end
+
+    test "every movement value the vocabulary names exists, and the gym has fifty-two" do
+      assert length(ExerciseCatalog.exercises()) == 52
+
+      counts =
+        ExerciseCatalog.equipment()
+        |> Map.new(&{&1["value"], length(ExerciseCatalog.by_equipment(&1["value"]))})
+
+      assert counts == %{
+               "maxpro" => 17,
+               "dumbbells" => 15,
+               "kettlebell" => 7,
+               "dip_bars" => 6,
+               "pull_up_bar" => 7
+             }
+    end
+
     test "every piece makes at least three movements possible" do
       for equipment <- ExerciseCatalog.equipment() do
         movements = ExerciseCatalog.by_equipment(equipment["value"])
@@ -142,12 +235,15 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       end
     end
 
-    test "every piece offers at most six, so one screen can hold it" do
-      # A menu is where a foggy moment goes to become a nineteen-item list. Six is
-      # the ceiling a picker can show at once without becoming a chore.
-      for equipment <- ExerciseCatalog.equipment() do
-        assert length(ExerciseCatalog.by_equipment(equipment["value"])) <= 6
-      end
+    test "the menu is longer than a screen, and bounding it is the method's job" do
+      # This test used to assert that no piece offers more than six movements, because a
+      # picker that drew a piece's whole menu ungrouped became a nineteen-item list. The
+      # menu has since grown on purpose — the gym was asked for enough movements to work
+      # every muscle group it can reach — so the bound moved to where a screen reads *one*
+      # list: `BotArmyFitness.Coach`'s sessions, six slots each. Keeping the old number
+      # here would have been a lie about the menu, and a second copy of the method's own
+      # bound, which `coach_test.exs` already asserts.
+      assert length(ExerciseCatalog.exercises()) >= 50
     end
 
     test "the menu names the equipment that is actually here" do

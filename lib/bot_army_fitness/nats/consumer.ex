@@ -89,6 +89,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "List recorded home-gym sets, newest first"
     },
     %{
+      subject: "fitness.coach.today",
+      type: :request_reply,
+      description: "Today's session in the push/pull rotation, with her own next numbers"
+    },
+    %{
       subject: "fitness.cardio.log",
       type: :request_reply,
       description: "Log cardio session and track streak"
@@ -349,6 +354,12 @@ defmodule BotArmyFitness.NATS.Consumer do
         publish_reply(
           nats_msg.reply_to,
           BotArmyFitness.Handlers.SetListHandler.handle_list(message)
+        )
+
+      "fitness.coach.today" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.CoachTodayHandler.handle_today(message)
         )
 
       "fitness.cardio.log" ->

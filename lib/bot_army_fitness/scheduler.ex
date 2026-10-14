@@ -148,6 +148,48 @@ defmodule BotArmyFitness.Scheduler do
     []
   end
 
+  @doc """
+  How many days she has trained, across the workout log and the set log.
+
+  The sibling of `days_since_last_workout/0`, and the same rule about what a set is: a
+  day with three recorded sets is **one** training day, and a day she only ran is a
+  training day too. Counted as a union of days and not as a sum of rows, because the
+  coach's rotation turns once per training day and would otherwise turn twice on a day
+  she squatted and once on a day she hiked.
+
+    * `{:ok, 0}` — nothing has ever been recorded. A real answer: a first session is the
+      first session, not a missing one.
+    * `{:error, reason}` — either store could not be read. Callers must not treat this as
+      "no days trained": a failed read is not a fresh start, and the coach must not answer
+      session one because a database hiccup looked like an empty log.
+  """
+  def training_days do
+    with {:ok, workouts} <- list_reply(workout_store().list(Tenant.default_tenant_id())),
+         {:ok, set_days} <- list_reply(set_store().distinct_days(Tenant.default_tenant_id())),
+         {:ok, set_days} <- all_dates(set_days) do
+      workout_days = workouts |> Enum.map(&workout_date/1) |> Enum.reject(&is_nil/1)
+
+      {:ok, MapSet.size(MapSet.union(MapSet.new(workout_days), MapSet.new(set_days)))}
+    end
+  rescue
+    e -> {:error, e}
+  end
+
+  # The two stores answer different shapes for the same fact: a workout is a record with a
+  # date field (and it may arrive as a `Date` or as an ISO 8601 string), a set-log day is
+  # the date itself, because that is what the query counts. A store that answers neither is
+  # an error and not a shorter list — a day silently dropped is a day the rotation forgets.
+  defp all_dates(days) when is_list(days) do
+    case Enum.reject(days, &match?(%Date{}, &1)) do
+      [] -> {:ok, days}
+      [bad | _] -> {:error, {:not_a_date, bad}}
+    end
+  end
+
+  defp list_reply({:ok, list}) when is_list(list), do: {:ok, list}
+  defp list_reply({:error, reason}), do: {:error, reason}
+  defp list_reply(other), do: {:error, {:unexpected_store_reply, other}}
+
   # Injectable store accessors, same seam the handlers use, so the reminder cycle
   # is testable without a database.
   defp goal_store, do: Application.get_env(:bot_army_fitness, :goal_store, GoalStore)

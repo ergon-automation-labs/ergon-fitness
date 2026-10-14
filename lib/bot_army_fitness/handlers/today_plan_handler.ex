@@ -22,11 +22,26 @@ defmodule BotArmyFitness.Handlers.TodayPlanHandler do
   `rescue _ -> :ok` around the call swallowed the `UndefinedFunctionError`, so the
   rotation plan was never cached and every request took the crashy cold branch.
 
-  The rotation plan is a pure function of `(user_id, date)`: the seed is the sum
+  The rotation plan here is a pure function of `(user_id, date)`: the seed is the sum
   of the user id's codepoints and the rotation is by day of year. It is therefore
   rebuilt per request and there is nothing to cache. `build_plan/3` is public and
   pure so the plan is testable without a database, mirroring the reason
   `WorkoutHandler.list_response/1` was split out of `handle_list/2`.
+
+  ## Superseded by `fitness.coach.today`
+
+  What this verb answers is a **workout type** — "Strength", "30-60 min" — derived from
+  that hash and the day of the year. It names no movement, it changes when the calendar
+  does rather than when her training does, and it cannot say what to put on the bar.
+  `BotArmyFitness.Coach` and `fitness.coach.today` are the bot's real answer to "what
+  should I do today": four sessions in a push/pull rotation that turns on the days she has
+  actually trained, six slots each, every movement carrying her own next number.
+
+  This handler is **left in place, working, and not extended**: a surface still drawing
+  `fitness.workout.today` would break if it vanished, and the two verbs answer different
+  questions (a type and a duration versus a session and its movements). New callers want
+  the coach. Do not add the catalog to this rotation — a plan that names movements belongs
+  to `Coach`, and two places deciding what she should lift would drift apart.
   """
 
   require Logger

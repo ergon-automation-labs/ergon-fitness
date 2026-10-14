@@ -6,5 +6,7 @@ defmodule BotArmyFitness.WorkoutSetStoreBehaviour do
   @callback create(map) :: {:ok, map} | {:error, term}
   @callback recent(binary, integer) :: {:ok, [map]}
   @callback for_exercise(binary, binary, integer) :: {:ok, [map]}
+  @callback newest_per_exercise(binary, [binary]) :: {:ok, %{binary => [map]}}
+  @callback distinct_days(binary) :: {:ok, [Date.t()]}
   @callback clear :: :ok
 end

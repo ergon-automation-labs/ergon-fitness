@@ -80,6 +80,52 @@ day from the workout log **and** the set log, and a failed read is an error, nev
 a shorter history. Both logs are read newest-day-first, so a set she backfills for
 an older day does not become "last time" — and does not make today look trained.
 
+## What a movement works, and the coach
+
+A movement is not a muscle either. `ExerciseCatalog` carries a **fixed vocabulary of
+eighteen groups** and every movement says what it is for (`"main"`) and what comes
+along (`"also"`) in those words — because "rear delts", "rear shoulders" and
+"posterior deltoid" are one group spelled three ways, and a coverage question asked
+in three vocabularies cannot be answered. `groups/0`, `group_label/1`,
+`exercises_for_group/1`, `works?/2` and the two receipt functions
+(`uncovered_groups/0`, `groups_without_a_primary_mover/0`) publish it. No group is
+left unreached by the menu; the lower back and the hip flexors are worked here and
+**never led with**, because a movement that leads with either needs equipment this
+house does not own, so the list is reported rather than padded away.
+
+`BotArmyFitness.Coach` is the method — and it is **pure**: no store, no clock. Four
+sessions (`push_a`, `pull_a`, `push_b`, `pull_b`), six slots each, every slot naming
+what it is there to work and offering the movements that fit:
+
+```
+fitness.coach.today   {}
+  -> {"rotation": {"length": 4, "position": 1, "days_trained": 5},
+      "session": {"value": "pull_a", "label": "Pull A — width first",
+                  "groups": [...], "slots": [{"slot": "a press", "sets": 3,
+                    "works": [...], "recent": "lat_pulldown",
+                    "movements": [{"value": ..., "label": ..., "measure": ...,
+                                   "min": ..., "max": ..., "last": ...,
+                                   "next": {...} | "top" | null}]}]}}
+```
+
+* the rotation turns on **training days**, not the calendar: `rem(days_trained, 4)`,
+  so a missed week does not skip a session. `Scheduler.training_days/0` counts
+  distinct days across both logs — a day with three sets is one day — and a failed
+  read is an error, never a shorter history;
+* nothing is chosen for her. Every movement a slot offers travels with **her own**
+  `next` number, straight from `Progression.next_load/1`, and the one movement named
+  in `recent` is a fact read back from her log rather than a pick. Ties keep the
+  slot's order, so the same log always names the same movement;
+* a read that fails is `read_failed`, never a session: a coach that answered "Push A"
+  because a database hiccup looked like a fresh log would be inventing a training
+  decision;
+* the menu is broader than the method on purpose — `dip_hold_top` is in the menu and
+  in no session. The bound that matters is the **session** (six slots, so a card stays
+  something a person can hold), not the menu, and the free picker stays the escape
+  hatch;
+* `fitness.workout.today` still answers, and is **superseded**: it names a workout
+  *type* from a hash of the user id and the day of the year, and no movement.
+
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
 database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a
 standby that starts empty, so a failover to mini loses her history until the data
