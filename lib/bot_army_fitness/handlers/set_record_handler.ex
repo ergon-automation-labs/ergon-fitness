@@ -31,15 +31,22 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
 
   A kept set answers with the row, the row before it, and the set to reach for next
   (`BotArmyFitness.Progression`). All three come from **one** read of the movement's
-  newest rows, taken after the insert: the list it returns is already
-  `[just_kept, before_that, …]`, so "last time" and "next time" are the same two rows
-  read once rather than twice.
+  newest rows, taken after the insert.
 
-  The suggestion therefore follows from the **newest set** — which is the one just
-  kept, unless she logged a day in the past, in which case it follows from her latest
-  real set and deliberately not from the backfilled row. That is the same rule
-  `previous` follows, so the two lines on a card cannot disagree about which set the
-  page is talking about.
+  That read is ordered by `date` and then `inserted_at`, so the row just kept is
+  **not** necessarily at its head: a day logged in the past sorts below a set she
+  already has, and the newest row is then her latest real set rather than the one in
+  this reply. So each of the two lines names the row it means instead of trusting a
+  position:
+
+    * `previous` is the newest row that is **not** the row just kept, so the card's
+      "last time" can never be the set she is looking at — which is exactly the
+      confusion a backfilled day would create.
+    * `next` follows the **newest** row, which is the one just kept unless she logged
+      a day in the past, in which case it follows her latest real set and deliberately
+      not from the backfilled row.
+
+  Both are the same rule stated twice: the row a line is about is the row it names.
   """
 
   require Logger
@@ -91,7 +98,7 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
 
             Reply.ok(%{
               "set" => set,
-              "previous" => Enum.at(history, 1),
+              "previous" => previous_set(history, set),
               "next" => Progression.next_load(history)
             })
 
@@ -204,6 +211,17 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
     set_store().create(payload)
   rescue
     e -> {:error, e}
+  end
+
+  # The newest row that is not the row just kept. The read is ordered by the day she did
+  # the set, not by when it was written, so a day logged in the past leaves the row just
+  # kept somewhere below the head — and a "last time" taken by position would then name
+  # the set she is looking at (measured live 2026-10-14: backfilling 2019-01-01 while a
+  # 2026-10-13 row existed made `previous` the row just written). `next` reads the same
+  # list by its head, because a suggestion that followed a backfilled row would send her
+  # backwards — two lines, two named rows, one read.
+  defp previous_set(history, set) do
+    Enum.find(history, fn row -> row["id"] != set["id"] end)
   end
 
   # The movement's newest rows, newest first — the one read both halves of the answer

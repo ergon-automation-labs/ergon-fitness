@@ -56,8 +56,9 @@ fitness.set.list     {"limit": 10}
   the room;
 * an absent load is a fact, not a missing field: a bodyweight movement's absent
   number means the body alone, and one with no load still records its reps;
-* the reply carries `previous` — the set before this one for the same movement —
-  so a surface can say "last time" without slicing a history itself;
+* the reply carries `previous` — the newest set that is **not** the one just
+  kept — so a surface can say "last time" without slicing a history itself, and a
+  day logged in the past cannot make the card point at the set she is looking at;
 * the same reply carries `next`, from `BotArmyFitness.Progression` — one rung up
   when the count has topped the movement's own window, one more rep when it has
   not, `"top"` when there is no higher number on the piece, and `null` when the
@@ -65,7 +66,10 @@ fitness.set.list     {"limit": 10}
   load recorded). A suggestion is not a row: it carries no id and above all no
   date;
 * both lines come from **one** read of the movement's newest rows, taken after
-  the insert, so they cannot disagree about which set the card means;
+  the insert. That read is ordered by the day she did the set, so the row just
+  kept is not always at its head: `previous` names the newest row that is not the
+  one just kept, `next` follows the head — her latest real set, when the day
+  logged was in the past — and each line names the row it is about;
 * `fitness.set.list` is the read those rows never had. Unlike
   `fitness.workout.list`, a store that cannot answer is a refusal
   (`read_failed`) and not an empty list — "she has logged nothing" and "the log

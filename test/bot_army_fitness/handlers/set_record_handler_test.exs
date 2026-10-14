@@ -147,6 +147,13 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
     end
 
     test "answers with the previous set for the same movement, so a card can say last time" do
+      # `create/1` answers with the row it kept, and the history is the same row plus the
+      # one before it. The stub mints the id so this test can say which row is which: a
+      # "last time" taken by position would be wrong the moment the two are not in the
+      # order the fixture assumes.
+      kept = kept_id()
+      stub_create_with_id(kept)
+
       stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant, "kb_swing", _limit ->
         {:ok,
          [
@@ -156,7 +163,8 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
              "amount" => 10,
              "load_kind" => "kg",
              "load_value" => 31.0
-           }),
+           })
+           |> Map.put("id", kept),
            %{"amount" => 12, "load_value" => 24.5, "load_kind" => "kg", "date" => "2026-10-10"}
          ]}
       end)
@@ -165,6 +173,53 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
 
       assert reply["data"]["previous"]["load_value"] == 24.5
       assert reply["data"]["previous"]["amount"] == 12
+      refute reply["data"]["previous"]["id"] == kept
+    end
+
+    test "a day logged in the past is never its own last time" do
+      # The read is ordered by the day she did the set, so a backfilled day sorts below a
+      # set she already has. Measured live on 2026-10-14: with a 2026-10-13 row in the
+      # store, writing a 2019-01-01 row made `previous` the row just written — the card
+      # said "last time: the thing you are looking at". `previous` names a row, not a
+      # position.
+      kept = kept_id()
+      stub_create_with_id(kept)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant,
+                                                                 "goblet_squat",
+                                                                 _limit ->
+        {:ok,
+         [
+           stored_set(%{
+             "exercise" => "goblet_squat",
+             "measure" => "reps",
+             "amount" => 12,
+             "load_kind" => "kg",
+             "load_value" => 15.0
+           })
+           |> Map.put("date", "2026-10-13"),
+           stored_set(%{
+             "exercise" => "goblet_squat",
+             "measure" => "reps",
+             "amount" => 8,
+             "load_kind" => "kg",
+             "load_value" => 15.0
+           })
+           |> Map.put("id", kept)
+           |> Map.put("date", "2019-01-01")
+         ]}
+      end)
+
+      reply = decode(SetRecordHandler.handle_record(request("goblet_squat", 8, 15)))
+
+      assert reply["data"]["set"]["id"] == kept
+
+      refute reply["data"]["previous"]["id"] == kept
+      assert reply["data"]["previous"]["date"] == "2026-10-13"
+
+      # And the suggestion still follows her latest real set rather than the day she
+      # just backfilled, so the two lines cannot disagree about which row they mean.
+      assert reply["data"]["next"]["load_value"] == 20.0
     end
 
     test "answers with the set to reach for next, from the same one read" do
@@ -332,6 +387,14 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
       "load_value" => payload["load_value"],
       "date" => Date.to_iso8601(Date.utc_today())
     }
+  end
+
+  defp kept_id, do: "11111111-1111-4111-8111-111111111111"
+
+  defp stub_create_with_id(id) do
+    stub(BotArmyFitness.WorkoutSetStoreMock, :create, fn payload ->
+      {:ok, payload |> stored_set() |> Map.put("id", id)}
+    end)
   end
 
   defp decode(encoded) when is_binary(encoded), do: Jason.decode!(encoded)
