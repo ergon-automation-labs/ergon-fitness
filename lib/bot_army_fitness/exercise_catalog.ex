@@ -29,15 +29,18 @@ defmodule BotArmyFitness.ExerciseCatalog do
                        and absent means the body alone.
 
   A surface therefore never has to know which unit to ask for: it reads the kind off
-  the wire with the equipment, and a suggestion (later) walks the equipment's own
-  ladder instead of adding a "reasonable" kilogram.
+  the wire with the equipment, and a suggestion walks the equipment's own ladder instead
+  of adding a "reasonable" kilogram — `BotArmyFitness.Progression`'s job, not this
+  module's.
 
   ## Nothing here is a score
 
   The catalog is a menu of what the gym makes possible, with a rep range per movement
   and nothing else. It has no order of merit, no programme, no progression rule and no
   streak — those are the bot's decisions to make from what she actually did, and a
-  menu that ranked its own items would be a curriculum, which this is not.
+  menu that ranked its own items would be a curriculum, which this is not. The ladder
+  above is the piece's own vocabulary (what it can be set to); which rung to reach for
+  next is `BotArmyFitness.Progression`'s, read from what she actually lifted.
 
   ## The equipment is the house's, not the surface's
 

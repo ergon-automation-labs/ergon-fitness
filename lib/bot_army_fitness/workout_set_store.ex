@@ -30,7 +30,6 @@ defmodule BotArmyFitness.WorkoutSetStore do
   - `create/1` — store one set
   - `recent/2` — a tenant's sets, newest first (limit)
   - `for_exercise/3` — one movement's sets, newest first (limit)
-  - `previous_for_exercise/2` — the set before the newest one, for a "last time" line
   - `clear/0` — delete every set (tests and tooling; genuinely destructive)
   """
 
@@ -105,24 +104,6 @@ defmodule BotArmyFitness.WorkoutSetStore do
      |> limit(^normalise_limit(limit))
      |> Repo.all()
      |> Enum.map(&schema_to_map/1)}
-  end
-
-  @doc """
-  The set immediately before the newest one for a movement, or `nil`.
-
-  `previous_for_exercise/2` exists so a card can say *"last time"* without
-  fetching a whole history and slicing it in the surface: "the set before this one"
-  is a database question, and a surface that computed it would be holding a copy of
-  the rule about which set counts.
-  """
-  @impl true
-  def previous_for_exercise(tenant_id, exercise)
-      when is_binary(tenant_id) and is_binary(exercise) do
-    case for_exercise(tenant_id, exercise, 2) do
-      {:ok, [_newest]} -> {:ok, nil}
-      {:ok, [_newest, previous | _]} -> {:ok, previous}
-      {:ok, []} -> {:ok, nil}
-    end
   end
 
   @doc """

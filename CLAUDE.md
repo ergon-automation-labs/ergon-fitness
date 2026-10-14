@@ -80,7 +80,9 @@ The bot listens to and publishes:
   (`reps_achieved`/`reps_target` → `PersonalExerciseStore.update_comfort/5`,
   written only by the Go fitness TUI). The movement's `measure` and its
   equipment's `load_kind` are derived from `ExerciseCatalog`, never sent by the
-  caller; an off-ladder load is refused (`load_not_on_ladder`), not rounded.
+  caller; an off-ladder load is refused (`load_not_on_ladder`), not rounded. Its
+  reply also carries `next` (`BotArmyFitness.Progression`), the set to reach for
+  next, and `fitness.set.list` reads the recorded sets back.
 - `fitness.exercise.*` - Exercise operations
 - `fitness.goal.*` - Goal tracking
 

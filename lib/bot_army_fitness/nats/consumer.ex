@@ -84,6 +84,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Record one set of a home-gym movement (load and reps)"
     },
     %{
+      subject: "fitness.set.list",
+      type: :request_reply,
+      description: "List recorded home-gym sets, newest first"
+    },
+    %{
       subject: "fitness.cardio.log",
       type: :request_reply,
       description: "Log cardio session and track streak"
@@ -338,6 +343,12 @@ defmodule BotArmyFitness.NATS.Consumer do
         publish_reply(
           nats_msg.reply_to,
           BotArmyFitness.Handlers.SetRecordHandler.handle_record(message)
+        )
+
+      "fitness.set.list" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.SetListHandler.handle_list(message)
         )
 
       "fitness.cardio.log" ->

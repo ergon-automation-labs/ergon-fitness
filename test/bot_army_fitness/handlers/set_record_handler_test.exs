@@ -16,8 +16,8 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
       {:ok, stored_set(payload)}
     end)
 
-    stub(BotArmyFitness.WorkoutSetStoreMock, :previous_for_exercise, fn _tenant, _exercise ->
-      {:ok, nil}
+    stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant, _exercise, _limit ->
+      {:ok, []}
     end)
 
     :ok
@@ -147,15 +147,66 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
     end
 
     test "answers with the previous set for the same movement, so a card can say last time" do
-      stub(BotArmyFitness.WorkoutSetStoreMock, :previous_for_exercise, fn _tenant, "kb_swing" ->
+      stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant, "kb_swing", _limit ->
         {:ok,
-         %{"amount" => 12, "load_value" => 24.5, "load_kind" => "kg", "date" => "2026-10-10"}}
+         [
+           stored_set(%{
+             "exercise" => "kb_swing",
+             "measure" => "reps",
+             "amount" => 10,
+             "load_kind" => "kg",
+             "load_value" => 31.0
+           }),
+           %{"amount" => 12, "load_value" => 24.5, "load_kind" => "kg", "date" => "2026-10-10"}
+         ]}
       end)
 
       reply = decode(SetRecordHandler.handle_record(request("kb_swing", 10, 31)))
 
       assert reply["data"]["previous"]["load_value"] == 24.5
       assert reply["data"]["previous"]["amount"] == 12
+    end
+
+    test "answers with the set to reach for next, from the same one read" do
+      # The count has reached the top of this movement's window (10..15 is walked in
+      # rep choices, so 12 is its top), so the kettlebell goes up one rung of its own
+      # ladder — 24.5 to 31 — and the count drops back to the bottom of the window.
+      stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant, "kb_swing", 2 ->
+        {:ok,
+         [
+           stored_set(%{
+             "exercise" => "kb_swing",
+             "measure" => "reps",
+             "amount" => 12,
+             "load_kind" => "kg",
+             "load_value" => 24.5
+           })
+         ]}
+      end)
+
+      reply = decode(SetRecordHandler.handle_record(request("kb_swing", 12, 24.5)))
+
+      assert reply["data"]["next"] == %{
+               "exercise" => "kb_swing",
+               "measure" => "reps",
+               "amount" => 10,
+               "load_kind" => "kg",
+               "load_value" => 31.0
+             }
+
+      refute Map.has_key?(reply["data"]["next"], "date")
+    end
+
+    test "says nothing about next time when the movement's history cannot be read" do
+      stub(BotArmyFitness.WorkoutSetStoreMock, :for_exercise, fn _tenant, _exercise, _limit ->
+        raise "could not lookup Ecto repo"
+      end)
+
+      reply = decode(SetRecordHandler.handle_record(request("kb_swing", 10, 31)))
+
+      assert reply["ok"] == true
+      assert reply["data"]["next"] == nil
+      assert reply["data"]["previous"] == nil
     end
 
     test "answers with a refusal, not an :ok, when the weight is off the ladder" do
@@ -231,6 +282,21 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
       end
     end
 
+    test "the suggestion the reply may carry is the three things the rule can answer" do
+      [ok, _refused] = read_schema("fitness.set.record.reply.json")["oneOf"]
+      [suggestion, top, nothing] = ok["properties"]["data"]["properties"]["next"]["oneOf"]
+
+      assert suggestion["properties"]["measure"]["enum"] == ExerciseCatalog.measures()
+      assert suggestion["properties"]["load_kind"]["enum"] == ExerciseCatalog.load_kinds()
+      assert top["const"] == "top"
+      assert nothing["type"] == "null"
+
+      # A suggestion dated is a set she did not do, so the schema must not leave room
+      # for the row's own day to travel on one.
+      refute Map.has_key?(suggestion["properties"], "date")
+      refute Map.has_key?(suggestion["properties"], "id")
+    end
+
     test "there is an example of a bodyweight set with no load" do
       path = Path.join(@schema_path, "../examples/fitness.set.record.reply.first.json")
       body = path |> File.read!() |> Jason.decode!()
@@ -258,7 +324,7 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
     %{
       "id" => UUID.uuid4(),
       "tenant_id" => payload["tenant_id"],
-      "user_id" => payload["user_id"],
+      "user_id" => Map.get(payload, "user_id"),
       "exercise" => payload["exercise"],
       "measure" => payload["measure"],
       "amount" => payload["amount"],

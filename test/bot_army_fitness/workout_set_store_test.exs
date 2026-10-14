@@ -28,7 +28,6 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
       assert function_exported?(WorkoutSetStore, :create, 1)
       assert function_exported?(WorkoutSetStore, :recent, 2)
       assert function_exported?(WorkoutSetStore, :for_exercise, 3)
-      assert function_exported?(WorkoutSetStore, :previous_for_exercise, 2)
     end
   end
 
@@ -73,12 +72,6 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
     test "for_exercise/3 cannot answer without the database" do
       assert_raise RuntimeError, ~r/Ecto repo/, fn ->
         WorkoutSetStore.for_exercise(@tenant, "kb_swing")
-      end
-    end
-
-    test "previous_for_exercise/2 cannot answer without the database" do
-      assert_raise RuntimeError, ~r/Ecto repo/, fn ->
-        WorkoutSetStore.previous_for_exercise(@tenant, "kb_swing")
       end
     end
   end

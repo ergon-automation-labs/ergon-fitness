@@ -26,11 +26,25 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
   (`:unknown_movement`). Anything the catalog knows is stored, including a
   bodyweight movement with no number at all — an absent number there means the body
   alone, which is a fact and not a missing field.
+
+  ## The answer carries what comes next as well as what came before
+
+  A kept set answers with the row, the row before it, and the set to reach for next
+  (`BotArmyFitness.Progression`). All three come from **one** read of the movement's
+  newest rows, taken after the insert: the list it returns is already
+  `[just_kept, before_that, …]`, so "last time" and "next time" are the same two rows
+  read once rather than twice.
+
+  The suggestion therefore follows from the **newest set** — which is the one just
+  kept, unless she logged a day in the past, in which case it follows from her latest
+  real set and deliberately not from the backfilled row. That is the same rule
+  `previous` follows, so the two lines on a card cannot disagree about which set the
+  page is talking about.
   """
 
   require Logger
 
-  alias BotArmyFitness.{ExerciseCatalog, WorkoutSetStore}
+  alias BotArmyFitness.{ExerciseCatalog, Progression, WorkoutSetStore}
   alias BotArmyLibraryRuntime.NATS.Reply
 
   @doc """
@@ -73,7 +87,13 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
               }
             )
 
-            Reply.ok(%{"set" => set, "previous" => previous_set(tenant_id, exercise["value"])})
+            history = history(tenant_id, exercise["value"])
+
+            Reply.ok(%{
+              "set" => set,
+              "previous" => Enum.at(history, 1),
+              "next" => Progression.next_load(history)
+            })
 
           {:error, reason} ->
             Logger.warning("Failed to record set: #{inspect(reason)}")
@@ -186,13 +206,17 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
     e -> {:error, e}
   end
 
-  defp previous_set(tenant_id, exercise) do
-    case set_store().previous_for_exercise(tenant_id, exercise) do
-      {:ok, previous} -> previous
-      other -> Logger.warning("Could not read the previous set: #{inspect(other)}") && nil
+  # The movement's newest rows, newest first — the one read both halves of the answer
+  # come from. An unreadable store answers with no history rather than with a wrong one:
+  # "this is the first set in your log" and "the read did not answer" are two different
+  # sentences and the cards say both, so an empty list here cannot become a lie.
+  defp history(tenant_id, exercise) do
+    case set_store().for_exercise(tenant_id, exercise, 2) do
+      {:ok, sets} when is_list(sets) -> sets
+      other -> Logger.warning("Could not read the last sets: #{inspect(other)}") && []
     end
   rescue
-    e -> Logger.warning("Could not read the previous set: #{inspect(e)}") && nil
+    e -> Logger.warning("Could not read the last sets: #{inspect(e)}") && []
   end
 
   defp set_store do

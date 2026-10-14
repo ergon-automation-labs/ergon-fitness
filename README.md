@@ -43,7 +43,9 @@ has its own verb and its own table:
 
 ```
 fitness.set.record   {"exercise": "kb_swing", "amount": 12, "load": 24.5}
-                     -> {"set": {...}, "previous": {...}|null}
+                     -> {"set": {...}, "previous": {...}|null, "next": {...}|"top"|null}
+fitness.set.list     {"limit": 10}
+                     -> {"sets": [...], "count": n, "limit": n}
 ```
 
 * the bot derives `measure` (`reps` | `seconds`) and `load_kind` from the
@@ -55,7 +57,19 @@ fitness.set.record   {"exercise": "kb_swing", "amount": 12, "load": 24.5}
 * an absent load is a fact, not a missing field: a bodyweight movement's absent
   number means the body alone, and one with no load still records its reps;
 * the reply carries `previous` — the set before this one for the same movement —
-  so a surface can say "last time" without slicing a history itself.
+  so a surface can say "last time" without slicing a history itself;
+* the same reply carries `next`, from `BotArmyFitness.Progression` — one rung up
+  when the count has topped the movement's own window, one more rep when it has
+  not, `"top"` when there is no higher number on the piece, and `null` when the
+  rule declines to guess (a hold, an unknown movement, a laddered piece with no
+  load recorded). A suggestion is not a row: it carries no id and above all no
+  date;
+* both lines come from **one** read of the movement's newest rows, taken after
+  the insert, so they cannot disagree about which set the card means;
+* `fitness.set.list` is the read those rows never had. Unlike
+  `fitness.workout.list`, a store that cannot answer is a refusal
+  (`read_failed`) and not an empty list — "she has logged nothing" and "the log
+  could not be read" are different sentences.
 
 A set counts as training: `Scheduler.days_since_last_workout/0` reads the newest
 day from the workout log **and** the set log, and a failed read is an error, never
