@@ -2,13 +2,28 @@ defmodule BotArmyFitness.WorkoutSetStore do
   @moduledoc """
   Set storage: every read is a database read.
 
-  The same rule `WorkoutStore` learned the hard way: **air and mini both run this
-  bot and both point at the same `ergon_fitness` database**, and since the two
-  nodes were put on one queue group each message goes to exactly one of them. A
-  process holding sets in memory would answer "this is what you lifted" with a
-  list that depended on which node happened to answer, and the other node's write
-  would be invisible — so there is no cache here either, and a read that cannot
-  reach the database fails instead of answering "no sets".
+  The rule `WorkoutStore` learned the hard way, restated with what is actually
+  true: **air and mini each run this bot against its own `ergon_fitness`
+  database** — measured 2026-10-14: air's `workouts` held 1 row, mini's held 0,
+  and ten `fitness.workout.list` requests on air's broker were answered by air
+  every time. Where the two brokers meet the nodes do share one queue group, so a
+  set can be written into the copy that the next read does not use. A process
+  holding sets in memory would answer "this is what you lifted" from whichever
+  node happened to be asked, and a wrong "last time" is wrong coaching rather than
+  a missing one — so there is no cache here either, and a read that cannot reach
+  the database fails instead of answering "no sets".
+
+  (Mini's copy is a standby that starts empty and nothing keeps it in step; a
+  failover to mini loses her training history until the data is copied over —
+  `make migrate-live-db-to-mini BOT=fitness`.)
+
+  ## Which set is "the newest one"
+
+  Both reads order by **the day the set happened** and only then by when the row was
+  written. A set is dated by the day it was performed, so an older day backfilled
+  later must not become "last time", and `recent/2`'s newest row is the day the
+  scheduler counts from. Ordering by insertion alone would let a backfilled row
+  move both answers.
 
   ## API
 
@@ -73,7 +88,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
     {:ok,
      WorkoutSet
      |> where([s], s.tenant_id == ^tenant_id)
-     |> order_by([s], desc: s.inserted_at)
+     |> order_by([s], desc: s.date, desc: s.inserted_at)
      |> limit(^normalise_limit(limit))
      |> Repo.all()
      |> Enum.map(&schema_to_map/1)}
@@ -86,7 +101,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
     {:ok,
      WorkoutSet
      |> where([s], s.tenant_id == ^tenant_id and s.exercise == ^exercise)
-     |> order_by([s], desc: s.inserted_at)
+     |> order_by([s], desc: s.date, desc: s.inserted_at)
      |> limit(^normalise_limit(limit))
      |> Repo.all()
      |> Enum.map(&schema_to_map/1)}

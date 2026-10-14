@@ -59,7 +59,13 @@ fitness.set.record   {"exercise": "kb_swing", "amount": 12, "load": 24.5}
 
 A set counts as training: `Scheduler.days_since_last_workout/0` reads the newest
 day from the workout log **and** the set log, and a failed read is an error, never
-a shorter history.
+a shorter history. Both logs are read newest-day-first, so a set she backfills for
+an older day does not become "last time" — and does not make today look trained.
+
+A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
+database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a
+standby that starts empty, so a failover to mini loses her history until the data
+is copied over: `make migrate-live-db-to-mini BOT=fitness` from `bot_army_infra`.
 
 `fitness.set.log` is a different thing and stays that way — it is a comfort
 calibration (`reps_achieved` vs `reps_target` into

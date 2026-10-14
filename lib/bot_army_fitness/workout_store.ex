@@ -5,17 +5,18 @@ defmodule BotArmyFitness.WorkoutStore do
   This used to be a GenServer holding every workout in memory, loaded once at
   boot and written through on each create and update. That is a cache of the
   database, which is fine for one process on one machine and wrong for this bot:
-  **air and mini both run it, and both point at the same `ergon_fitness`
-  database.** A row created on one node was never in the other node's map, so
-  `list/1` answered "these are the workouts" with a list that depended on which
-  node happened to answer. After the two nodes were put on one queue group (so
-  each message goes to exactly one of them) that stopped being a rare
-  divergence and became the normal case: half the reads could not see the row
-  that had just been written.
+  **air and mini both run it, each against its own `ergon_fitness` database**
+  (measured 2026-10-14: air's `workouts` held 1 row, mini's held 0, and ten
+  `fitness.workout.list` requests on air's broker were all answered by air). The
+  two nodes share one queue group where their brokers meet, so a row can be written
+  into the copy the next read does not use. A node answering from its own map made
+  that worse rather than better: `list/1` returned "these are the workouts", a list
+  that depended on which node happened to answer, and the row just written could be
+  absent from it.
 
   There is no cache now. `list/1`, `get/2` and `list_by_date/2` query the
-  database, so any node answers with the same rows, and a read that cannot reach
-  the database fails instead of answering "none".
+  database, so whatever the node can see, it answers truthfully, and a read that
+  cannot reach the database fails instead of answering "none".
 
   `update/2` likewise loads the row it is told to update. It used to check the
   in-memory map first and answer `{:error, :not_found}` for a row the *other*
