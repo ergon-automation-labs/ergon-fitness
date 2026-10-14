@@ -21,13 +21,20 @@ end
 
 # NATS connection.
 #
-# BotArmyLibraryRuntime.NATS.Connection resolves servers from app config only
-# (opts -> :bot_army_library_runtime, :nats, servers -> fail-safe default of the
-# dev broker, port 4223). It does NOT read NATS_HOST/NATS_PORT itself, so a bot
-# that omits this block silently lands on the dev broker no matter what the
-# plist says. Every other bot sets it here from the environment; deploy plists
-# opt a bot into production with NATS_PORT=4222 (fail-safe policy: unset env
-# means 4223, the quiet dev broker).
+# BotArmyLibraryRuntime.NATS.Connection resolves servers in this order:
+# explicit opts -> this app config -> NATS_PORT in the environment -> the
+# fail-safe default of the dev broker (localhost:4223). It DOES read
+# NATS_HOST/NATS_PORT itself (Connection.servers_from_env/0), but app config
+# beats the environment, so this block is what decides where the bot goes and
+# a bot that omits it lands on the dev broker no matter what the plist says.
+# Deploy plists opt a bot into production with NATS_PORT=4222 (fail-safe policy:
+# unset env means 4223, the quiet dev broker).
+#
+# The environment read here is not only the shell's: config/config.exs loads a
+# repo-root .env with System.put_env/2, so a value in .env overrides one the
+# process was started with -- including NATS_PORT=42991 on a test run. A test
+# suite that looks hermetic can therefore be talking to the live broker. See
+# docs/runbooks/KNOWN_ISSUE_DOTENV_IN_VM_OVERRIDES_THE_TEST_BROKER.md.
 nats_host = System.get_env("NATS_HOST", "localhost")
 nats_port = System.get_env("NATS_PORT", "4223") |> String.to_integer()
 

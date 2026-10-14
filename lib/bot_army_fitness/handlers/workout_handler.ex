@@ -42,6 +42,13 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   stored under, so a surface never maps one vocabulary onto the other itself — it
   sends the movement's own word in `title` and the activity the bot attached to it.
 
+  `rep_choices` is the counts a press may name for a movement measured in reps. It
+  travels beside the movements rather than inside them because it is one list for the
+  whole gym — the counts she presses — while each movement keeps its own window in
+  `min`/`max` for the bot's suggestions to read. A movement measured in seconds draws
+  from its own window; there is no list of seconds, and inventing one would be
+  inventing a duration.
+
   Answers with an already-encoded `Reply`, like `handle_log/1`, so the consumer's
   clause is one line either way.
   """
@@ -50,7 +57,8 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       "workout_types" => WorkoutTypes.type_options(),
       "intensities" => WorkoutTypes.intensity_options(),
       "equipment" => ExerciseCatalog.equipment(),
-      "exercises" => ExerciseCatalog.exercise_options()
+      "exercises" => ExerciseCatalog.exercise_options(),
+      "rep_choices" => ExerciseCatalog.rep_choices()
     })
   end
 

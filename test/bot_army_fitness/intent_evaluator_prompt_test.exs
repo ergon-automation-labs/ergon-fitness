@@ -8,6 +8,13 @@ defmodule BotArmyFitness.IntentEvaluatorPromptTest do
 
   setup :set_mox_global
 
+  # "When did she last train?" reads both logs, so a test stubbing one has to answer
+  # for the other. An empty set log is the do-nothing default.
+  setup do
+    stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit -> {:ok, []} end)
+    :ok
+  end
+
   # The live crash payload (air, 2026-10-13): `context.summary.idle_minutes` is the
   # aggregate that `AccumulatedContext.compute_summary/1` produces, not a scalar.
   defp series_context(idle_minutes) do
@@ -127,6 +134,24 @@ defmodule BotArmyFitness.IntentEvaluatorPromptTest do
                %{score: 0.9},
                []
              ) == {:error, :timeout}
+    end
+
+    test "a set logged today is not an invitation either" do
+      # A movement is not a workout and writes no workout row at all; if the invite
+      # only read the workout log it would arrive on a day she trained.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
+        {:ok, [%{"id" => "s-1", "date" => Date.utc_today()}]}
+      end)
+
+      assert IntentEvaluator.handle_propose_social_check_in_action(
+               "fitness",
+               "propose_social_check_in",
+               "intent-set-today",
+               %{score: 0.9},
+               []
+             ) == :ok
     end
 
     test "a workout logged today is not an invitation" do

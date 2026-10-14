@@ -20,7 +20,7 @@ defmodule BotArmyFitness.Scheduler do
 
   require Logger
 
-  alias BotArmyFitness.{GoalStore, WorkoutStore}
+  alias BotArmyFitness.{GoalStore, WorkoutSetStore, WorkoutStore}
   alias BotArmyLibraryCore.Tenant
 
   # "Never worked out" sentinel — deliberately past the "urgent" tier (7+) so a
@@ -42,15 +42,13 @@ defmodule BotArmyFitness.Scheduler do
   """
   def check_workouts_needed do
     try do
-      tenant_id = Tenant.default_tenant_id()
+      case latest_training_date() do
+        {:ok, last_training_date} ->
+          build_reminders(goal_store().list(Tenant.default_tenant_id()), last_training_date)
 
-      case workout_store().list(tenant_id) do
-        {:ok, workouts} when is_list(workouts) ->
-          build_reminders(goal_store().list(tenant_id), latest_workout_date(workouts))
-
-        other ->
+        {:error, reason} ->
           Logger.warning(
-            "[FitnessScheduler] Could not read workouts, skipping this cycle: #{inspect(other)}"
+            "[FitnessScheduler] Could not read the training log, skipping this cycle: #{inspect(reason)}"
           )
 
           []
@@ -81,32 +79,82 @@ defmodule BotArmyFitness.Scheduler do
   """
   def days_since_last_workout do
     try do
-      case workout_store().list(Tenant.default_tenant_id()) do
-        {:ok, workouts} when is_list(workouts) ->
-          {:ok, days_since(latest_workout_date(workouts))}
-
-        {:error, reason} ->
-          {:error, reason}
-
-        other ->
-          {:error, {:unexpected_store_reply, other}}
+      case latest_training_date() do
+        {:ok, date} -> {:ok, days_since(date)}
+        {:error, reason} -> {:error, reason}
       end
     rescue
       e -> {:error, e}
     end
   end
 
-  defp build_reminders(goals, last_workout_date) do
+  @doc """
+  The most recent day she trained, whichever record says so — a workout **or a set**.
+
+  A set is training. The home gym writes `workout_sets` (a load and a rep count) and
+  writes no `workouts` row at all, because a movement is not a session; without this
+  read the bot would report "nothing on record" for a week in which she did nothing
+  but three sets a day, and escalate a reminder against a training log that is full.
+
+  Reads the set store only when the workout read succeeded — if either store cannot be
+  read, the whole answer is the failure, because a *partly* readable log cannot say
+  "this is the newest day you trained" and the failure must not be mistaken for a
+  streak of misses.
+  """
+  def latest_training_date do
+    with {:ok, workout_date} <- latest_date(workout_store().list(Tenant.default_tenant_id())),
+         {:ok, set_date} <- latest_date(set_store().recent(Tenant.default_tenant_id(), 1)) do
+      {:ok, newest(workout_date, set_date)}
+    end
+  end
+
+  defp latest_date({:ok, records}) when is_list(records) do
+    {:ok,
+     records
+     |> Enum.map(&record_date/1)
+     |> Enum.reject(&is_nil/1)
+     |> Enum.sort_by(&Date.to_gregorian_days/1, :desc)
+     |> List.first()}
+  end
+
+  defp latest_date({:ok, other}), do: {:error, {:unexpected_store_reply, {:ok, other}}}
+  defp latest_date({:error, reason}), do: {:error, reason}
+
+  # The newest of two days, where "nothing on record" is not a day at all. Both sides
+  # nil stays nil, and `days_since/1` turns that into the never-worked-out sentinel.
+  defp newest(left, right) do
+    [left, right]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(&Date.to_gregorian_days/1, :desc)
+    |> List.first()
+  end
+
+  # A set is day-stamped by the store on the same convention a workout is
+  # (`Date.utc_today()`), and the field is `date` on both rows, so one reader serves both.
+  defp record_date(record), do: workout_date(record)
+
+  defp build_reminders(goals, last_training_date) when is_list(goals) do
     goals
     |> Enum.filter(&active?/1)
-    |> Enum.map(fn goal -> {goal["id"], days_since(last_workout_date)} end)
+    |> Enum.map(fn goal -> {goal["id"], days_since(last_training_date)} end)
     |> Enum.filter(fn {_goal_id, days_since} -> days_since > 0 end)
+  end
+
+  defp build_reminders(other, _last_training_date) do
+    Logger.warning(
+      "[FitnessScheduler] Could not read goals, skipping this cycle: #{inspect(other)}"
+    )
+
+    []
   end
 
   # Injectable store accessors, same seam the handlers use, so the reminder cycle
   # is testable without a database.
   defp goal_store, do: Application.get_env(:bot_army_fitness, :goal_store, GoalStore)
   defp workout_store, do: Application.get_env(:bot_army_fitness, :workout_store, WorkoutStore)
+
+  defp set_store,
+    do: Application.get_env(:bot_army_fitness, :workout_set_store, WorkoutSetStore)
 
   @doc false
   # Normalise at the boundary: workout dates may arrive as Date structs (loaded

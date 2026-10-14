@@ -68,6 +68,7 @@ defmodule BotArmyFitness.PulsePublisherTest do
 
   defp stub_workouts(reply) do
     stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> reply end)
+    stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit -> {:ok, []} end)
   end
 
   defp idle_metrics, do: %{workouts: 0, streak_days: 0, active_goals: 0}

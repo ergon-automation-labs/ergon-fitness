@@ -25,7 +25,6 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   use GenServer
   require Logger
-  alias BotArmyLibraryRuntime.Registry
 
   @version Mix.Project.config()[:version]
   @registry_heartbeat_ms 20_000
@@ -78,6 +77,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       subject: "fitness.set.log",
       type: :request_reply,
       description: "Log set and update comfort level"
+    },
+    %{
+      subject: "fitness.set.record",
+      type: :request_reply,
+      description: "Record one set of a home-gym movement (load and reps)"
     },
     %{
       subject: "fitness.cardio.log",
@@ -329,6 +333,12 @@ defmodule BotArmyFitness.NATS.Consumer do
           {:error, reason} ->
             Logger.warning("[SetLoggerHandler] Failed to reply: #{inspect(reason)}")
         end
+
+      "fitness.set.record" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.SetRecordHandler.handle_record(message)
+        )
 
       "fitness.cardio.log" ->
         response = BotArmyFitness.Handlers.CardioHandler.handle_log_cardio(message)

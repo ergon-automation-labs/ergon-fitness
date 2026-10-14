@@ -9,6 +9,14 @@ defmodule BotArmyFitness.SchedulerTest do
 
   setup :set_mox_global
 
+  # Both stores are read by one question now ("when did she last train?"), so every
+  # test that stubs one has to answer for the other. An empty set log is the
+  # do-nothing default; the tests about sets override it.
+  setup do
+    stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit -> {:ok, []} end)
+    :ok
+  end
+
   @goal_id "11111111-1111-1111-1111-111111111111"
 
   # Regression guard: the check function used to call
@@ -188,6 +196,68 @@ defmodule BotArmyFitness.SchedulerTest do
       assert Scheduler.days_since_last_workout() == {:ok, 999}
     end
 
+    test "a set is training, even on a day with no workout row" do
+      # The home gym writes `workout_sets` and no `workouts` row at all, because a
+      # movement is not a session. Reading only the workout log would tell her she
+      # has not trained in a week while her set log is full.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
+        {:ok, [%{"id" => "s-1", "date" => days_ago(2)}]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 2}
+    end
+
+    test "the newest of the two logs is the answer, not the newer kind of row" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout(days_ago(9))]}
+      end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
+        {:ok, [%{"id" => "s-1", "date" => days_ago(1)}]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 1}
+
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
+        {:ok, [workout(days_ago(1))]}
+      end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
+        {:ok, [%{"id" => "s-1", "date" => days_ago(9)}]}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:ok, 1}
+    end
+
+    test "an unreadable set log is an error, never a shorter history" do
+      # Half a history is not "when did she last train". Reporting the workout log
+      # alone would nag her about a missed workout on a day she trained, which is
+      # the exact noise this bot exists not to make.
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
+        {:error, :timeout}
+      end)
+
+      assert Scheduler.days_since_last_workout() == {:error, :timeout}
+    end
+
+    test "a raising set store is an error, not a crash in the caller" do
+      stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
+      stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit -> raise "db down" end)
+
+      assert {:error, %RuntimeError{}} = Scheduler.days_since_last_workout()
+    end
+
+    test "a workout and a set on the same day is still that day, not double-counted" do
+      stub_stores([goal()], [workout(days_ago(3))], [%{"id" => "s-1", "date" => days_ago(3)}])
+
+      assert Scheduler.days_since_last_workout() == {:ok, 3}
+      assert Scheduler.check_workouts_needed() == [{@goal_id, 3}]
+    end
+
     test "reads the workouts of the default tenant" do
       expect(BotArmyFitness.WorkoutStoreMock, :list, fn tenant ->
         assert tenant == BotArmyLibraryCore.Tenant.default_tenant_id()
@@ -198,9 +268,10 @@ defmodule BotArmyFitness.SchedulerTest do
     end
   end
 
-  defp stub_stores(goals, workouts) do
+  defp stub_stores(goals, workouts, sets \\ []) do
     stub(BotArmyFitness.GoalStoreMock, :list, fn _tenant -> goals end)
     stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, workouts} end)
+    stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit -> {:ok, sets} end)
   end
 
   defp goal(id \\ @goal_id, overrides \\ %{}) do

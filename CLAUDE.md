@@ -75,6 +75,12 @@ mix test
 
 The bot listens to and publishes:
 - `fitness.workout.*` - Workout operations
+- `fitness.set.record` - one set of one home-gym movement (load × reps). **Not**
+  `fitness.set.log`, which is a comfort calibration
+  (`reps_achieved`/`reps_target` → `PersonalExerciseStore.update_comfort/5`,
+  written only by the Go fitness TUI). The movement's `measure` and its
+  equipment's `load_kind` are derived from `ExerciseCatalog`, never sent by the
+  caller; an off-ladder load is refused (`load_not_on_ladder`), not rounded.
 - `fitness.exercise.*` - Exercise operations
 - `fitness.goal.*` - Goal tracking
 

@@ -55,8 +55,15 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       end
     end
 
-    test "the dumbbells start at 10 and step by 5" do
-      assert ExerciseCatalog.load_settings("dumbbells") == %{"min" => 10.0, "step" => 5.0}
+    test "the dumbbells start at 10, step by 5, and stop at 55" do
+      # 55 kg is the top of this rack (the pair is adjustable, each dumbbell carries
+      # the number). Without the top the ladder would grow past what the rack can
+      # make, which is the same lie as a kettlebell setting that does not exist.
+      assert ExerciseCatalog.load_settings("dumbbells") == %{
+               "min" => 10.0,
+               "max" => 55.0,
+               "step" => 5.0
+             }
     end
 
     test "the kettlebell offers its seven real settings, not a invented step" do
@@ -241,7 +248,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       schema = read_schema("fitness.workout.options.reply.json")
 
       assert schema["properties"]["data"]["required"] |> Enum.sort() ==
-               ~w(equipment exercises intensities workout_types)
+               ~w(equipment exercises intensities rep_choices workout_types)
     end
 
     test "there is an example proving each load kind is exercisable" do
@@ -250,6 +257,94 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       loads = body["data"]["equipment"] |> Enum.map(& &1["load"]) |> Enum.uniq()
 
       assert Enum.sort(loads) == ["bodyweight", "kg", "level"]
+    end
+  end
+
+  describe "the counts she presses" do
+    test "are hers, and are a list rather than a step" do
+      # She gave five counts: 5, 8, 10, 12, 20. A step would have to invent the gaps
+      # (5, 10, 15, 20 is a different gym), so the list travels as a list.
+      assert ExerciseCatalog.rep_choices() == [5, 8, 10, 12, 20]
+
+      gaps =
+        ExerciseCatalog.rep_choices()
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [a, b] -> b - a end)
+        |> Enum.uniq()
+
+      assert length(gaps) > 1, "the counts became an arithmetic ladder: #{inspect(gaps)}"
+    end
+
+    test "are published on the options reply, so no surface keeps its own copy" do
+      reply =
+        BotArmyFitness.Handlers.WorkoutHandler.handle_options()
+        |> Jason.decode!()
+
+      assert reply["data"]["rep_choices"] == [5, 8, 10, 12, 20]
+    end
+
+    test "every movement's measure is one the reply schema allows" do
+      assert ExerciseCatalog.measures() == ["reps", "seconds"]
+      assert ExerciseCatalog.load_kinds() == ["kg", "level", "bodyweight"]
+
+      schema = read_schema("fitness.workout.options.reply.json")
+
+      assert schema["properties"]["data"]["properties"]["exercises"]["items"]["properties"][
+               "measure"
+             ]["enum"] == ExerciseCatalog.measures()
+    end
+  end
+
+  describe "the ladder a number has to be on" do
+    test "the dumbbells take anything they can be set to, and nothing else" do
+      assert ExerciseCatalog.load_allowed?("dumbbells", 10)
+      assert ExerciseCatalog.load_allowed?("dumbbells", 25)
+      assert ExerciseCatalog.load_allowed?("dumbbells", 55)
+
+      refute ExerciseCatalog.load_allowed?("dumbbells", 9)
+      refute ExerciseCatalog.load_allowed?("dumbbells", 24.5)
+      refute ExerciseCatalog.load_allowed?("dumbbells", 60)
+    end
+
+    test "the kettlebell takes its seven settings, not the numbers between them" do
+      for setting <- [5.0, 11.5, 18.0, 24.5, 31.0, 37.5, 44.0] do
+        assert ExerciseCatalog.load_allowed?("kettlebell", setting),
+               "#{setting} kg is a setting of this kettlebell"
+      end
+
+      refute ExerciseCatalog.load_allowed?("kettlebell", 24)
+      refute ExerciseCatalog.load_allowed?("kettlebell", 50)
+    end
+
+    test "the MaxPRO dials 1 to 25 and locks there" do
+      assert ExerciseCatalog.load_allowed?("maxpro", 1)
+      assert ExerciseCatalog.load_allowed?("maxpro", 25)
+
+      refute ExerciseCatalog.load_allowed?("maxpro", 0)
+      refute ExerciseCatalog.load_allowed?("maxpro", 26)
+      refute ExerciseCatalog.load_allowed?("maxpro", 12.5)
+    end
+
+    test "a bodyweight movement takes any number, including a negative one" do
+      # The number is load added (a belt) or taken away (an assist), which is how a
+      # pull-up gets easier without a second machine.
+      assert ExerciseCatalog.load_allowed?("pull_up_bar", 0)
+      assert ExerciseCatalog.load_allowed?("pull_up_bar", 20)
+      assert ExerciseCatalog.load_allowed?("pull_up_bar", -20)
+
+      refute ExerciseCatalog.load_allowed?("pull_up_bar", "heavy")
+    end
+
+    test "a piece this gym does not have has no ladder at all" do
+      refute ExerciseCatalog.load_allowed?("barbell", 60)
+      refute ExerciseCatalog.load_allowed?("dumbbells", "heavy")
+    end
+
+    test "a movement's equipment is the piece it stands at" do
+      assert ExerciseCatalog.equipment_for("goblet_squat") == "dumbbells"
+      assert ExerciseCatalog.equipment_for("kb_swing") == "kettlebell"
+      assert ExerciseCatalog.equipment_for("dead_hang") == "pull_up_bar"
+      assert ExerciseCatalog.equipment_for("dumbbell_bench_press") == nil
     end
   end
 

@@ -16,8 +16,9 @@ defmodule BotArmyFitness.ExerciseCatalog do
   Each piece of equipment declares what a number *means* on it:
 
     * `"kg"`         — kilograms, and the equipment carries the settings it actually
-                       offers (dumbbells step from 10 by 5; the kettlebell has seven
-                       discrete settings, so its ladder is a list and not a step).
+                       offers (dumbbells step from 10 to 55 by 5 — they stop there —
+                       and the kettlebell has seven discrete settings, so its ladder
+                       is a list and not a step).
     * `"level"`      — the device's own resistance level. The MaxPRO dials a
                        PowerClutch, not a weight stack: 25 levels, and the clutch
                        stops there — it locks rather than continuing past 25. No
@@ -50,6 +51,14 @@ defmodule BotArmyFitness.ExerciseCatalog do
   @level "level"
   @bodyweight "bodyweight"
 
+  @measures ["reps", "seconds"]
+
+  # Her counts, not a ladder: 5, 8, 10, 12, 20. A step would have to invent the gaps.
+  @rep_choices [5, 8, 10, 12, 20]
+
+  # Float ladders (24.5 kg kettlebell settings) and step arithmetic both need slack.
+  @ladder_tolerance 0.01
+
   # The gym, in the order a picker should offer it. `load` is what a number means;
   # `min`/`step` and `settings` are the ladder the device actually has, and are absent
   # when the load is the body (there is no ladder for a pull-up).
@@ -70,6 +79,7 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "label" => "Adjustable dumbbells",
       "load" => @kg,
       "min" => 10.0,
+      "max" => 55.0,
       "step" => 5.0
     },
     %{
@@ -434,6 +444,80 @@ defmodule BotArmyFitness.ExerciseCatalog do
       exercise ->
         %{"measure" => exercise["measure"], "min" => exercise["min"], "max" => exercise["max"]}
     end
+  end
+
+  @doc """
+  The counts she actually presses, from the person whose gym this is.
+
+  A rep range is the gym's opinion about a movement ("8-12 is the window worth
+  working in"); these are the counts a press may name. They are separate facts and
+  live in separate places for that reason: a range is what the bot suggests from, a
+  choice is what a card draws. The list is hers and not a ladder — she gave
+  `5, 8, 10, 12, 20`, which is not an arithmetic sequence, so it is a list and not a
+  `min`/`step`.
+  """
+  @spec rep_choices() :: [pos_integer()]
+  def rep_choices, do: @rep_choices
+
+  @doc "What a movement's range can count. The values `measure` may take."
+  @spec measures() :: [String.t()]
+  def measures, do: @measures
+
+  @doc "What a number on a piece of equipment can mean. The values `load` may take."
+  @spec load_kinds() :: [String.t()]
+  def load_kinds, do: [@kg, @level, @bodyweight]
+
+  @doc "The piece of equipment a movement belongs to, or `nil` for a name outside this gym."
+  @spec equipment_for(term()) :: String.t() | nil
+  def equipment_for(value) do
+    case exercise(value) do
+      nil -> nil
+      exercise -> exercise["equipment"]
+    end
+  end
+
+  @doc """
+  Whether a number is one this piece of equipment can actually show.
+
+  The ladder is the device's own fact: the kettlebell has seven discrete settings, the
+  dumbbells step from 10 to 55, the MaxPRO dials 1 to 25. A number that is not on the
+  ladder is not a weight she could have selected, so this is a refusal and not a
+  round — rounding 23 kg onto a kettlebell that has no 23 would record a set that
+  never happened. The body takes any number: a bodyweight movement's number is load
+  added (a belt) or taken away (an assist), which is why it may be negative.
+
+  `false` for a piece this gym does not have, and for a number that is not a number.
+  """
+  @spec load_allowed?(term(), term()) :: boolean()
+  def load_allowed?(equipment_value, value) do
+    case find_equipment(equipment_value) do
+      nil -> false
+      %{"load" => @bodyweight} -> is_number(value)
+      equipment -> on_ladder?(equipment, value)
+    end
+  end
+
+  defp on_ladder?(%{"settings" => settings}, value) when is_number(value) do
+    Enum.any?(settings, &within?(&1, value))
+  end
+
+  defp on_ladder?(%{"min" => min, "step" => step} = equipment, value) when is_number(value) do
+    top = Map.get(equipment, "max")
+    above_min? = value >= min - @ladder_tolerance
+    within_top? = is_nil(top) or value <= top + @ladder_tolerance
+    on_step? = integral?((value - min) / step)
+    above_min? and within_top? and on_step?
+  end
+
+  defp on_ladder?(_equipment, _value), do: false
+
+  # Float ladders mean 24.5 is 24.5 plus or minus the last bit, and a step count is
+  # never exactly integral. Both comparisons need a tolerance or the kettlebell's own
+  # settings would be refused.
+  defp within?(setting, value), do: abs(setting - value) <= @ladder_tolerance
+
+  defp integral?(steps) do
+    abs(steps - Float.round(steps)) <= @ladder_tolerance
   end
 
   defp find_equipment(value), do: Enum.find(@equipment, &(&1["value"] == value))
