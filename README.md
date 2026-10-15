@@ -163,6 +163,43 @@ fitness.coach.last   {}
 * `recent_day/1` is **two bounded queries** — the newest date, then that day's rows — so
   the answer cannot grow with the log and a page limit cannot cut a session in half.
 
+`fitness.coach.chat` is the last of the tab's questions and the only one that is not a read of a
+store: she asks about the gym or the method in her own words, and the **bot** answers. The surface
+sends one thing — `{"message": "..."}` — and draws the one thing it gets back; it never talks to
+the LLM bot, holds no copy of the gym, and knows no rule about what may be said. Three parts of
+this bot keep the rule the coach rule states:
+
+* **the grounding is built here**, in `BotArmyFitness.CoachChat` (pure): the `system_prompt/0`
+  says in words that the model must not choose a session or a movement for her, must not set a
+  number for her, and must not keep streaks or scores; `prompt/2` carries the gym (every piece,
+  every area, every movement, with the note that the MaxPRO has a wall attachment but is set up on
+  the floor most of the time **without** it), today's session and her last session, and her
+  question last;
+* **a failed read is said as a failed read** — `CoachChatHandler.context/1` never omits a read it
+  could not make: `today: nil`, `days_trained: nil` and `last: :unreadable` each become an
+  explicit "could not be read just now — do not say what it is" line in the prompt, so a hiccup
+  cannot become "you have kept nothing";
+* **the answer is text and nothing else** — the reply is `{"ok": true, "data": {"response":
+  "..."}}`, the same envelope as every other read, and it carries no `stage`, no `offer` and no
+  movement. Staging already belongs to the two reads above it (§53), and a chat that could put a
+  movement in front of her would be a second, unbounded way to choose for her.
+
+```
+fitness.coach.chat   {"message": "what does the cable row work?"}
+  -> {"ok": true, "data": {"response": "The cable row is a back movement. Start light."}}
+```
+
+* an empty or missing `message` is refused in the bot's own words (`missing_message`), and a
+  model that does not answer, times out or answers with something that is not words is
+  `llm_failed` — never a blank answer;
+* one owner reads an LLM reply: `BotArmyFitness.LlmReply` (`text/1`, `decode/1`, `read/1`),
+  shared with `fitness.chat`;
+* the consumer **`spawn`s** the handler, because the hop to the LLM bot is seconds long and the
+  fitness subscriptions must not queue behind one question. `fitness.chat` still runs
+  synchronously — the same wart, left for later;
+* the timeout is **20 s** (`@llm_timeout_ms`), against the persona's 8 s: a question that reads
+  the catalog, the method and her log is a bigger ask than a one-line persona reply.
+
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
 database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a
 standby that starts empty, so a failover to mini loses her history until the data

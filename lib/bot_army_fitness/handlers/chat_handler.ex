@@ -187,24 +187,10 @@ defmodule BotArmyFitness.Handlers.ChatHandler do
   end
 
   @doc false
-  def decode_llm_response(body) do
-    case Jason.decode(body) do
-      {:ok, decoded} -> extract_text(decoded)
-      {:error, reason} -> {:error, reason}
-    end
-  end
+  def decode_llm_response(body), do: BotArmyFitness.LlmReply.decode(body)
 
   @doc false
-  def extract_text(%{"completion" => text}) when is_binary(text) and text != "", do: {:ok, text}
-  def extract_text(%{"response" => text}) when is_binary(text) and text != "", do: {:ok, text}
-
-  def extract_text(%{"data" => %{"text" => text}}) when is_binary(text) and text != "",
-    do: {:ok, text}
-
-  def extract_text(other) do
-    Logger.debug("[ChatHandler] Unexpected LLM response shape: #{inspect(other)}")
-    {:error, :invalid_response}
-  end
+  def extract_text(decoded), do: BotArmyFitness.LlmReply.text(decoded)
 
   defp reply(reply_to, payload) do
     case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do

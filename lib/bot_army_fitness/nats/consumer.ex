@@ -99,6 +99,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "The movements of her most recent training day, for doing the session again"
     },
     %{
+      subject: "fitness.coach.chat",
+      type: :request_reply,
+      description: "Ask the coach a question, grounded in the catalog, the method and her log"
+    },
+    %{
       subject: "fitness.cardio.log",
       type: :request_reply,
       description: "Log cardio session and track streak"
@@ -372,6 +377,15 @@ defmodule BotArmyFitness.NATS.Consumer do
           nats_msg.reply_to,
           BotArmyFitness.Handlers.CoachLastHandler.handle_last(message)
         )
+
+      "fitness.coach.chat" ->
+        # The LLM round trip is seconds long and every fitness subscription rides on this one
+        # process, so the wait is spawned rather than blocking the mailbox: today's session and
+        # the movement menu must keep answering while somebody's question is with the model.
+        # The handler owns its own reply, on every path, so a question is never left waiting.
+        spawn(fn ->
+          BotArmyFitness.Handlers.CoachChatHandler.handle_chat(message, nats_msg.reply_to)
+        end)
 
       "fitness.cardio.log" ->
         response = BotArmyFitness.Handlers.CardioHandler.handle_log_cardio(message)

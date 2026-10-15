@@ -86,13 +86,21 @@ defmodule BotArmyFitness.ExerciseCatalog do
   # The MaxPRO's ladder tops out at 25: the PowerClutch locks at its last level rather
   # than turning further, so 25 is the top of the range and not a round number.
   @equipment [
+    # `"note"` is a fact about the house rather than about the device, and it is here
+    # because this list is the only place the gym is written down. It rides on
+    # `equipment/0` and so reaches anything that talks about the gym — the picker
+    # ignores it (it takes value and label), the coach's own words use it. Nothing
+    # may read it as a limit: the piece is used from the floor, which is how it is
+    # used, not a smaller menu.
     %{
       "value" => "maxpro",
       "label" => "MaxPRO",
       "load" => @level,
       "min" => 1,
       "max" => 25,
-      "step" => 1
+      "step" => 1,
+      "note" =>
+        "a wall attachment exists for it, but it is set up on the floor most of the time, without the bench attachment"
     },
     %{
       "value" => "dumbbells",
@@ -768,7 +776,7 @@ defmodule BotArmyFitness.ExerciseCatalog do
   def load_settings(value) do
     case find_equipment(value) do
       %{"load" => @bodyweight} -> nil
-      %{} = equipment -> Map.drop(equipment, ["value", "label", "load"])
+      %{} = equipment -> Map.take(equipment, ["min", "max", "step", "settings"])
       nil -> nil
     end
   end

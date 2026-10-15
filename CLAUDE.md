@@ -138,11 +138,16 @@ here is a change to what her body is told to do:
    `fitness.coach.last` answers her last session on a subject of its own for this reason:
    a log that could not be read is a refusal, never `{"day": null}`, and a surface that
    asked the coach's read for it would empty the method beside it when the log failed.
+   `fitness.coach.chat` keeps the rule for a model: `CoachChatHandler.context/1` renders
+   every read it could not make as an explicit "could not be read just now — do not say
+   what it is" line, so no hiccup can be answered as "she has kept nothing".
 5. **The coach is pure and chooses nothing for her.** `BotArmyFitness.Coach` reads no store
    and no clock; its rotation turns on training days (not the calendar), and every
    movement travels with her own `next` number beside it. `recent` names a fact from her
    log, not a pick. Progression is `BotArmyFitness.Progression`'s — do not re-derive it
-   here or on a surface.
+   here or on a surface. The chat keeps this rule too: its reply carries **text and no
+   movement** — no `stage`, no `offer` — and `CoachChat.system_prompt/0` tells the model in
+   words not to choose a session or a movement for her and not to set a number for her.
 6. **`fitness.workout.today` is superseded, not deleted.** It answers a workout *type*
    derived from a user-id hash and the day of the year. New callers want
    `fitness.coach.today`; do not grow the old plan a catalog.

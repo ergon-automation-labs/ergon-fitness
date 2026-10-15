@@ -55,6 +55,21 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       end
     end
 
+    test "the MaxPRO says how it is actually set up, because the menu cannot" do
+      # The catalog lists cable movements for a machine that *can* hang on a wall and *can*
+      # stand on a bench. In this house it mostly stands on the floor without the bench
+      # attachment, so the note travels with the piece: the coach's grounding reads it, and a
+      # model given only the movement list would seat her on a bench that is not set up. It is
+      # additive on the wire — `equipment_options/0` still takes value and label alone.
+      maxpro = Enum.find(ExerciseCatalog.equipment(), &(&1["value"] == "maxpro"))
+
+      assert maxpro["note"] =~ "floor"
+      assert maxpro["note"] =~ "bench"
+
+      assert Enum.find(ExerciseCatalog.equipment_options(), &(&1["value"] == "maxpro")) ==
+               %{"value" => "maxpro", "label" => "MaxPRO"}
+    end
+
     test "the dumbbells start at 10, step by 5, and stop at 55" do
       # 55 kg is the top of this rack (the pair is adjustable, each dumbbell carries
       # the number). Without the top the ladder would grow past what the rack can
