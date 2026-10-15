@@ -30,6 +30,7 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
       assert function_exported?(WorkoutSetStore, :for_exercise, 3)
       assert function_exported?(WorkoutSetStore, :newest_per_exercise, 2)
       assert function_exported?(WorkoutSetStore, :distinct_days, 1)
+      assert function_exported?(WorkoutSetStore, :recent_day, 1)
     end
   end
 
@@ -55,14 +56,16 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
              from the day she typed it in, not the day she trained.
              """
 
-      # Three occurrences of the ordering clause, so `split` yields four parts.
-      assert length(String.split(source, "desc: s.date, desc: s.inserted_at)")) == 4,
+      # Four occurrences of the ordering clause, so `split` yields five parts.
+      assert length(String.split(source, "desc: s.date, desc: s.inserted_at)")) == 5,
              """
-             expected all three reads that return rows — recent/2, for_exercise/3 and
-             newest_per_exercise/2 — to be ordered by the set's own day. A read that is
-             not is how a backfilled older day becomes "last time" or a second training
-             day. distinct_days/1 is not in this count because it returns days, not rows:
-             the database does the deduping, so there is no row to order.
+             expected every read that finds a row by day — recent/2, for_exercise/3,
+             newest_per_exercise/2 and the day read behind recent_day/1 — to be ordered by
+             the set's own day. A read that is not is how a backfilled older day becomes
+             "last time" or a second training day. distinct_days/1 is not in this count
+             because it returns days, not rows: the database does the deduping, so there is
+             no row to order, and recent_day/1's second read (the rows within a day it has
+             already found) orders by insert time alone, which is what that read is for.
              """
 
       assert String.contains?(source, "distinct([s], s.date)"),
@@ -98,6 +101,10 @@ defmodule BotArmyFitness.WorkoutSetStoreTest do
 
     test "distinct_days/1 cannot answer without the database" do
       assert_raise RuntimeError, ~r/Ecto repo/, fn -> WorkoutSetStore.distinct_days(@tenant) end
+    end
+
+    test "recent_day/1 cannot answer without the database" do
+      assert_raise RuntimeError, ~r/Ecto repo/, fn -> WorkoutSetStore.recent_day(@tenant) end
     end
   end
 end

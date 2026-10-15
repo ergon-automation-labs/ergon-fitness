@@ -136,6 +136,33 @@ fitness.coach.today   {}
 * `fitness.workout.today` still answers, and is **superseded**: it names a workout
   *type* from a hash of the user id and the day of the year, and no movement.
 
+`fitness.coach.last` is a read of her **log**, not of the method — the third question the
+Fitness tab asks, and one no list could answer, because `fitness.set.list`'s page is ten
+while a session can be eighteen sets. It answers the newest day she trained and the last
+set of each distinct movement on it, last-touched order, as **values only**:
+
+```
+fitness.coach.last   {}
+  -> {"day": "2026-10-14", "count": 2,
+      "movements": [{"value": "kb_swing", "measure": "reps", "amount": 12,
+                     "load_kind": "kg", "load_value": 24.5},
+                    {"value": "pull_up", "measure": "reps", "amount": 8,
+                     "load_kind": "bodyweight", "load_value": null}]}
+```
+
+* the day is the one **the bot found** (`WorkoutSetStore.recent_day/1`), never a date a
+  surface picked out of a page of rows, and no history is an answer —
+  `{"day": null, "movements": [], "count": 0}` — rather than a failure;
+* a store that cannot be read is `read_failed`, never an empty day: `fitness.coach.last`
+  is a subject of its own **because** a log that could not be read must be a refusal rather
+  than an empty coach beside it;
+* the read carries **no vocabulary**: `value`, `measure`, `amount`, `load_kind`,
+  `load_value` and nothing else, so a surface resolves the label and the piece from the
+  catalog it already holds. It chooses nothing for her (§ the coach rule) and it stages
+  nothing;
+* `recent_day/1` is **two bounded queries** — the newest date, then that day's rows — so
+  the answer cannot grow with the log and a page limit cannot cut a session in half.
+
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
 database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a
 standby that starts empty, so a failover to mini loses her history until the data

@@ -32,6 +32,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
   - `for_exercise/3` — one movement's sets, newest first (limit)
   - `newest_per_exercise/2` — the newest set of each of several movements, in one read
   - `distinct_days/1` — the days she trained, one per day
+  - `recent_day/1` — the sets of her most recent training day, newest first, or `nil`
   - `clear/0` — delete every set (tests and tooling; genuinely destructive)
   """
 
@@ -153,6 +154,28 @@ defmodule BotArmyFitness.WorkoutSetStore do
   end
 
   @doc """
+  Her most recent training day's sets, newest first, or `{:ok, nil}` if she has none.
+
+  "Her last session" is the day the date-first ordering already calls newest — the same
+  day `recent/2`'s first row and `Scheduler.days_since_last_workout/0` name. The day is
+  found by one read (its date, not its rows) and its sets by a second that is bounded to
+  that day, so the answer does not grow with the log and a page limit cannot cut a
+  session in half. The day and the rows travel together so a caller never has to guess
+  which day a list belongs to.
+
+  A log with nothing in it is `{:ok, nil}` — a fact, not a failure. A database that
+  cannot be reached raises, like every other read here, and the handler above turns that
+  into a refusal rather than an empty session.
+  """
+  @impl true
+  def recent_day(tenant_id) when is_binary(tenant_id) do
+    case latest_date(tenant_id) do
+      nil -> {:ok, nil}
+      %Date{} = date -> {:ok, %{"date" => to_string(date), "sets" => sets_on(tenant_id, date)}}
+    end
+  end
+
+  @doc """
   Delete every set.
 
   Answers `:ok` and deletes the rows. Nothing in the bot calls it; it exists for
@@ -166,6 +189,27 @@ defmodule BotArmyFitness.WorkoutSetStore do
   end
 
   # Private functions
+
+  # The newest day, by the same date-first ordering every row read uses. `nil` when the
+  # tenant has no sets at all, which the caller turns into a fact rather than an error.
+  defp latest_date(tenant_id) do
+    WorkoutSet
+    |> where([s], s.tenant_id == ^tenant_id)
+    |> order_by([s], desc: s.date, desc: s.inserted_at)
+    |> limit(1)
+    |> select([s], s.date)
+    |> Repo.one()
+  end
+
+  # Every set of one day, newest first. This is the one read that is not date-first: the
+  # day is already known, so the only ordering left is which set she wrote down last.
+  defp sets_on(tenant_id, date) do
+    WorkoutSet
+    |> where([s], s.tenant_id == ^tenant_id and s.date == ^date)
+    |> order_by([s], desc: s.inserted_at)
+    |> Repo.all()
+    |> Enum.map(&schema_to_map/1)
+  end
 
   defp normalise_limit(limit) when is_integer(limit) and limit > 0, do: limit
   defp normalise_limit(_other), do: @default_limit

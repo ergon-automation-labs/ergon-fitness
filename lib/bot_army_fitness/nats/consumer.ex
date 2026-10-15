@@ -94,6 +94,11 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "Today's session in the push/pull rotation, with her own next numbers"
     },
     %{
+      subject: "fitness.coach.last",
+      type: :request_reply,
+      description: "The movements of her most recent training day, for doing the session again"
+    },
+    %{
       subject: "fitness.cardio.log",
       type: :request_reply,
       description: "Log cardio session and track streak"
@@ -360,6 +365,12 @@ defmodule BotArmyFitness.NATS.Consumer do
         publish_reply(
           nats_msg.reply_to,
           BotArmyFitness.Handlers.CoachTodayHandler.handle_today(message)
+        )
+
+      "fitness.coach.last" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.CoachLastHandler.handle_last(message)
         )
 
       "fitness.cardio.log" ->

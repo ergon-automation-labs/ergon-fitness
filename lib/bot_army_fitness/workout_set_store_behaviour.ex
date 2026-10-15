@@ -8,5 +8,6 @@ defmodule BotArmyFitness.WorkoutSetStoreBehaviour do
   @callback for_exercise(binary, binary, integer) :: {:ok, [map]}
   @callback newest_per_exercise(binary, [binary]) :: {:ok, %{binary => [map]}}
   @callback distinct_days(binary) :: {:ok, [Date.t()]}
+  @callback recent_day(binary) :: {:ok, map | nil}
   @callback clear :: :ok
 end

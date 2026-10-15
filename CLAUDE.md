@@ -135,6 +135,9 @@ here is a change to what her body is told to do:
 4. **A failed read is a refusal, never an empty history.** `read_failed` covers an
    unreadable set log, day count or history — "she has logged nothing" and "nobody could
    read the log" are different sentences, and only one of them is safe to print.
+   `fitness.coach.last` answers her last session on a subject of its own for this reason:
+   a log that could not be read is a refusal, never `{"day": null}`, and a surface that
+   asked the coach's read for it would empty the method beside it when the log failed.
 5. **The coach is pure and chooses nothing for her.** `BotArmyFitness.Coach` reads no store
    and no clock; its rotation turns on training days (not the calendar), and every
    movement travels with her own `next` number beside it. `recent` names a fact from her
