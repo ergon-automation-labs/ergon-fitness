@@ -156,6 +156,34 @@ defmodule BotArmyFitness.ExerciseCatalog do
   # for my side shoulders" reads `main`, and "did today's session reach my triceps at all"
   # reads both. Nothing here is a score, and nothing here is a programme: this is what
   # the movement *works*, never how much of it is worth doing.
+  # The broad areas a body is read in, for a screen that would otherwise draw eighteen
+  # chips at once. Each group above belongs to exactly one area — this list is a
+  # partition of `@groups`, not a second opinion about the muscles, and a test says so
+  # out loud. `chest` and `shoulders` are kept apart because a press and a raise are
+  # different questions; `traps` sits with the back because a shrug is a pull. Nothing
+  # here is a programme and nothing here is a muscle: it is how many words a person
+  # wants on one row before a body stops being a menu.
+  @areas [
+    %{"value" => "chest", "label" => "chest", "groups" => ["chest"]},
+    %{
+      "value" => "shoulders",
+      "label" => "shoulders",
+      "groups" => ["front_delts", "side_delts", "rear_delts"]
+    },
+    %{
+      "value" => "back",
+      "label" => "back",
+      "groups" => ["lats", "upper_back", "traps", "lower_back"]
+    },
+    %{"value" => "arms", "label" => "arms", "groups" => ["biceps", "triceps", "forearms"]},
+    %{"value" => "core", "label" => "core", "groups" => ["abs", "obliques", "hip_flexors"]},
+    %{
+      "value" => "legs",
+      "label" => "legs",
+      "groups" => ["glutes", "quads", "hamstrings", "calves"]
+    }
+  ]
+
   @exercises [
     %{
       "value" => "cable_chest_press",
@@ -779,6 +807,53 @@ defmodule BotArmyFitness.ExerciseCatalog do
   def exercises, do: @exercises
 
   @doc """
+  The broad areas a body is read in, each carrying the groups it covers.
+
+  A screen that would otherwise draw eighteen group chips draws these instead. The
+  groups stay the honest vocabulary — a movement works groups, never areas — and this
+  list only says which groups sit near one another. Each area is sent whole
+  (`value`, `label`, `groups`), so a surface can filter the menu by area without
+  holding a copy of the mapping: the bot is what says which groups an area covers.
+  """
+  @spec area_options() :: [map()]
+  def area_options, do: @areas
+
+  @doc "The area values, in reading order."
+  @spec areas() :: [String.t()]
+  def areas, do: Enum.map(@areas, & &1["value"])
+
+  @doc "Whether a value names an area in this vocabulary."
+  @spec area_value?(term()) :: boolean()
+  def area_value?(value), do: Enum.any?(@areas, &(&1["value"] == value))
+
+  @doc "The human words for an area, or `nil` for a value outside this vocabulary."
+  @spec area_label(term()) :: String.t() | nil
+  def area_label(value) do
+    case Enum.find(@areas, &(&1["value"] == value)) do
+      nil -> nil
+      area -> area["label"]
+    end
+  end
+
+  @doc "The group values an area covers, or `nil` for a value outside this vocabulary."
+  @spec groups_for_area(term()) :: [String.t()] | nil
+  def groups_for_area(value) do
+    case Enum.find(@areas, &(&1["value"] == value)) do
+      nil -> nil
+      area -> area["groups"]
+    end
+  end
+
+  @doc "The area a group belongs to, or `nil` for a group this vocabulary does not have."
+  @spec area_for_group(term()) :: String.t() | nil
+  def area_for_group(group) do
+    case Enum.find(@areas, &(group in &1["groups"])) do
+      nil -> nil
+      area -> area["value"]
+    end
+  end
+
+  @doc """
   The movements as wire pairs, carrying what a picker needs to draw and send one:
   the equipment it belongs to, the activity it is stored as, what its range counts,
   and the range itself.
@@ -793,7 +868,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
         "activity" => exercise["activity"],
         "measure" => exercise["measure"],
         "min" => exercise["min"],
-        "max" => exercise["max"]
+        "max" => exercise["max"],
+        "muscles" => exercise["muscles"]
       }
     end)
   end

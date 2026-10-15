@@ -42,6 +42,12 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
   stored under, so a surface never maps one vocabulary onto the other itself — it
   sends the movement's own word in `title` and the activity the bot attached to it.
 
+  `areas` is the broad layer a person picks before a movement: chest, shoulders, back,
+  arms, core, legs, each carrying the muscle groups it covers. The groups themselves
+  travel beside every movement in `exercises[].muscles` (`main` is what it is for,
+  `also` what comes along), so a surface can filter the menu by body area without
+  keeping its own copy of which group belongs where.
+
   `rep_choices` is the counts a press may name for a movement measured in reps. It
   travels beside the movements rather than inside them because it is one list for the
   whole gym — the counts she presses — while each movement keeps its own window in
@@ -58,6 +64,7 @@ defmodule BotArmyFitness.Handlers.WorkoutHandler do
       "intensities" => WorkoutTypes.intensity_options(),
       "equipment" => ExerciseCatalog.equipment(),
       "exercises" => ExerciseCatalog.exercise_options(),
+      "areas" => ExerciseCatalog.area_options(),
       "rep_choices" => ExerciseCatalog.rep_choices()
     })
   end

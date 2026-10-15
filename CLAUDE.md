@@ -127,8 +127,11 @@ here is a change to what her body is told to do:
 2. **A load that is not a setting the equipment really has is refused, never rounded.**
    Rounding records a set that never happened and the next read builds a progression on a
    weight that is not in the room.
-3. **The bot owns the vocabulary.** `ExerciseCatalog` holds the gym, the muscle groups and
-   the movements; a surface draws them and keeps no copy.
+3. **The bot owns the vocabulary.** `ExerciseCatalog` holds the gym, the muscle groups,
+   the **six broad areas** and the movements; a surface draws them and keeps no copy. The
+   area partition is exact — every group belongs to exactly one area — so an area filter
+   is unambiguous, and a surface filters on the movement `"muscles"` it is sent, never on
+   a mapping of its own.
 4. **A failed read is a refusal, never an empty history.** `read_failed` covers an
    unreadable set log, day count or history — "she has logged nothing" and "nobody could
    read the log" are different sentences, and only one of them is safe to print.

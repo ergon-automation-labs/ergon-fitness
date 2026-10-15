@@ -93,6 +93,16 @@ left unreached by the menu; the lower back and the hip flexors are worked here a
 **never led with**, because a movement that leads with either needs equipment this
 house does not own, so the list is reported rather than padded away.
 
+Eighteen exact groups make a truthful vocabulary and a poor picker, so `ExerciseCatalog`
+also carries a **six-area layer** — `chest`, `shoulders`, `back`, `arms`, `core`, `legs` —
+and the partition is **exact**: every group belongs to exactly one area, so a movement
+filtered by an area is never also filtered out by a neighbouring one. `area_options/0`,
+`groups_for_area/1` and `area_for_group/1` publish it, and `fitness.workout.options`
+sends `"areas"` beside the gym and each movement's own `"muscles"`, so a surface can
+offer *pick the body part, then the movement* without a copy of the mapping. An area
+filter is against a movement's `"main"` groups only — a movement that merely comes along
+on a group is not one she would press for that area.
+
 `BotArmyFitness.Coach` is the method — and it is **pure**: no store, no clock. Four
 sessions (`push_a`, `pull_a`, `push_b`, `pull_b`), six slots each, every slot naming
 what it is there to work and offering the movements that fit:

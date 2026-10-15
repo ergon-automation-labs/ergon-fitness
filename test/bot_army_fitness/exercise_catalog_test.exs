@@ -210,6 +210,54 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
                ~w(cable_chest_press cable_fly floor_press dip dip_hold_top dip_bar_push_up)
     end
 
+    test "the broad areas partition the groups, with none left out and none counted twice" do
+      # The area layer exists so a screen draws six chips instead of eighteen. It is a
+      # partition, not a second vocabulary: every group sits in exactly one area, so
+      # filtering the menu by area can never miss a movement or double it.
+      covered = Enum.flat_map(ExerciseCatalog.area_options(), & &1["groups"])
+
+      assert Enum.sort(covered) == Enum.sort(ExerciseCatalog.groups())
+      assert covered == Enum.uniq(covered)
+
+      for pair <- ExerciseCatalog.area_options() do
+        assert Map.keys(pair) |> Enum.sort() == ["groups", "label", "value"]
+        assert pair["label"] == String.downcase(pair["label"])
+        assert pair["groups"] != []
+      end
+    end
+
+    test "the area covering a group can be asked either way round" do
+      assert ExerciseCatalog.area_for_group("rear_delts") == "shoulders"
+      assert ExerciseCatalog.area_for_group("traps") == "back"
+      assert ExerciseCatalog.area_for_group("hip_flexors") == "core"
+      assert ExerciseCatalog.area_for_group("not_a_group") == nil
+
+      assert ExerciseCatalog.groups_for_area("legs") ==
+               ["glutes", "quads", "hamstrings", "calves"]
+
+      assert ExerciseCatalog.groups_for_area("not_an_area") == nil
+      assert ExerciseCatalog.area_label("chest") == "chest"
+      assert ExerciseCatalog.area_label("not_an_area") == nil
+      refute ExerciseCatalog.area_value?("chest ")
+      assert ExerciseCatalog.area_value?("core")
+    end
+
+    test "the options reply carries the areas and each movement's muscles" do
+      # "Which movements for my back" has to be answerable from the reply alone: the
+      # bot sends the areas and the groups under each, and the muscles on every
+      # movement, so a surface holds no copy of either.
+      reply = WorkoutHandler.handle_options(%{}) |> Jason.decode!()
+
+      assert reply["data"]["areas"] == ExerciseCatalog.area_options()
+
+      press = reply["data"]["exercises"] |> Enum.find(&(&1["value"] == "cable_chest_press"))
+
+      assert press["muscles"] == %{
+               "main" => ["chest"],
+               "also" => ["front_delts", "triceps"]
+             }
+    end
+
     test "every movement value the vocabulary names exists, and the gym has fifty-two" do
       assert length(ExerciseCatalog.exercises()) == 52
 
@@ -287,7 +335,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
     test "an exercise option carries everything a picker sends with it" do
       for option <- ExerciseCatalog.exercise_options() do
         assert Map.keys(option) |> Enum.sort() ==
-                 ~w(activity equipment label max measure min value)
+                 ~w(activity equipment label max measure min muscles value)
       end
     end
 
@@ -296,6 +344,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
 
       assert reply["data"]["equipment"] == ExerciseCatalog.equipment()
       assert reply["data"]["exercises"] == ExerciseCatalog.exercise_options()
+      assert reply["data"]["areas"] == ExerciseCatalog.area_options()
       assert reply["data"]["workout_types"] == WorkoutTypes.type_options()
     end
 
@@ -338,6 +387,14 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       assert schema["properties"]["data"]["properties"]["exercises"]["items"]["properties"][
                "activity"
              ]["enum"] == WorkoutTypes.values()
+    end
+
+    test "the reply's area enum matches the broad layer" do
+      schema = read_schema("fitness.workout.options.reply.json")
+
+      assert schema["properties"]["data"]["properties"]["areas"]["items"]["properties"]["value"][
+               "enum"
+             ] == ExerciseCatalog.areas()
     end
 
     test "the reply requires the gym it always sends" do
