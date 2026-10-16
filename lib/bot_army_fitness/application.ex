@@ -6,6 +6,10 @@ defmodule BotArmyFitness.Application do
   - NATS message consumer
   - Workout tracker
   - Goal progress monitor
+
+  `BotArmyFitness.JobBell` starts in every environment, including test: it is a bare registry
+  and the only thing that lets a coach-chat wait be woken by the llm bot's completion event
+  instead of polling. Tests that exercise the wait start their own instance.
   """
 
   use Application
@@ -15,7 +19,7 @@ defmodule BotArmyFitness.Application do
   @impl true
   def start(_type, _args) do
     children =
-      []
+      [BotArmyFitness.JobBell]
       |> maybe_add_repo()
       |> maybe_add_goal_store()
       |> maybe_add_goal_scheduler()

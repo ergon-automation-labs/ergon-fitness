@@ -10,7 +10,30 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
 
   @tenant "00000000-0000-0000-0000-000000000001"
 
+  # Answers both halves of the coach's ask — the fast lane and the backgrounded job — from one
+  # scripted function, so the fallback is exercised with no broker and no model.
+  defmodule FakeLlm do
+    def request(subject, payload, _opts) do
+      fun = Agent.get(:coach_chat_fake, & &1)
+      fun.(subject, payload)
+    end
+  end
+
   setup do
+    {:ok, pid} =
+      Agent.start_link(fn -> fn _subject, _payload -> flunk("no fake installed") end end)
+
+    Process.register(pid, :coach_chat_fake)
+
+    Application.put_env(:bot_army_fitness, :coach_chat_publisher, FakeLlm)
+    Application.put_env(:bot_army_fitness, :coach_job_publisher, FakeLlm)
+
+    on_exit(fn ->
+      Application.delete_env(:bot_army_fitness, :coach_chat_publisher)
+      Application.delete_env(:bot_army_fitness, :coach_job_publisher)
+      if Process.alive?(pid), do: Agent.stop(pid)
+    end)
+
     stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
     stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn _tenant -> {:ok, []} end)
 
@@ -139,6 +162,45 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
     end
   end
 
+  describe "ask/3" do
+    test "the fast lane's answer is the answer" do
+      set_llm(fn
+        "llm.prompt.submit", _ -> {:ok, %{"completion" => "the fast words"}}
+      end)
+
+      assert CoachChatHandler.ask(@tenant, "u", "q") == {:ok, "the fast words"}
+    end
+
+    test "a fast lane that fails backgrounds a local job instead of losing the question" do
+      set_llm(fn
+        "llm.prompt.submit", _ ->
+          {:error, :timeout}
+
+        "llm.request.chat", _ ->
+          {:ok, %{"job_id" => "job-x", "status" => "accepted"}}
+
+        "llm.job.status", _ ->
+          {:ok,
+           %{
+             "ok" => true,
+             "status" => "completed",
+             "result" => %{"content" => "the slow words"}
+           }}
+      end)
+
+      assert CoachChatHandler.ask(@tenant, "u", "q") == {:ok, "the slow words"}
+    end
+
+    test "both lanes failing is a refusal, never an invented answer" do
+      set_llm(fn
+        "llm.prompt.submit", _ -> {:error, :timeout}
+        "llm.request.chat", _ -> {:error, :timeout}
+      end)
+
+      assert CoachChatHandler.ask(@tenant, "u", "q") == {:error, :timeout}
+    end
+  end
+
   defp request do
     %{
       "event" => "fitness.coach.chat",
@@ -146,6 +208,10 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
       "user_id" => "00000000-0000-0000-0000-000000000002",
       "payload" => %{"message" => "what does the cable row work?"}
     }
+  end
+
+  defp set_llm(fun) do
+    Agent.update(:coach_chat_fake, fn _ -> fun end)
   end
 
   defp set(exercise) do

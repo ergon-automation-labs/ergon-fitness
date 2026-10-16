@@ -29,11 +29,22 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
   not text, the reply is `:llm_failed` with a sentence of its own, not a made-up session. If the
   log could not be read, the facts say so and the model is told not to describe her log — the
   answer is still an answer about the gym, and the page can draw it.
+
+  ## The fast lane, and the background job behind it
+
+  The question goes to `llm.prompt.submit` first, because the general local model answers it in
+  about a second and that is the answer almost every time. If that hop fails or outlives its
+  twenty seconds, the question is handed to `CoachJob` as a backgrounded job on the **local**
+  uncensored model (`llm.request.chat`, `model_type: "uncensored"`), and this process waits for
+  the words — up to four minutes — reading `llm.job.status` each time the llm bot rings its bell.
+  The wire is unchanged: an answer is still an answer and a failure is still `:llm_failed`, so a
+  panel older than this behaviour simply times out where this one waits. Her words and her log
+  are the reason the fallback is pinned local.
   """
 
   require Logger
 
-  alias BotArmyFitness.{Coach, CoachChat, LlmReply, Scheduler, WorkoutSetStore}
+  alias BotArmyFitness.{Coach, CoachChat, CoachJob, LlmReply, Scheduler, WorkoutSetStore}
   alias BotArmyLibraryCore.Tenant
   alias BotArmyLibraryRuntime.NATS.Reply
 
@@ -73,13 +84,36 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
 
   def handle_chat(_message, _reply_to), do: :ok
 
-  defp ask(tenant_id, user_id, question) do
+  # Public only so the tests can prove the fallback wiring: a fast lane that fails must hand the
+  # question to the local job rather than losing it.
+  @doc false
+  def ask(tenant_id, user_id, question) do
     context = context(tenant_id)
+    prompt = CoachChat.prompt(question, context)
 
-    BotArmyLibraryRuntime.NATS.Publisher.request(
+    # The fast lane first: the general local model answers this in about a second when it is
+    # healthy, and that is the answer almost every time. A hop that fails or outlives its twenty
+    # seconds is not the end of the question — it is the signal to hand it to the local model as
+    # a background job (`CoachJob`), which the panel's longer wait is sized to cover. The job is
+    # `model_type: "uncensored"`, so the fallback is the path that stays on this machine.
+    case fast_answer(prompt, tenant_id, user_id) do
+      {:ok, text} ->
+        {:ok, text}
+
+      {:error, reason} ->
+        Logger.info(
+          "The coach's fast lane did not answer (#{inspect(reason)}); backgrounding a local job"
+        )
+
+        CoachJob.ask(prompt)
+    end
+  end
+
+  defp fast_answer(prompt, tenant_id, user_id) do
+    llm_publisher().request(
       "llm.prompt.submit",
       %{
-        "text" => CoachChat.prompt(question, context),
+        "text" => prompt,
         "request_type" => "chat",
         "tenant_id" => tenant_id,
         "user_id" => user_id,
@@ -187,6 +221,16 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
 
   defp set_store do
     Application.get_env(:bot_army_fitness, :workout_set_store, WorkoutSetStore)
+  end
+
+  # Injectable so a test can answer the fast lane without a broker or a model, and so the
+  # fallback can be driven from the same place.
+  defp llm_publisher do
+    Application.get_env(
+      :bot_army_fitness,
+      :coach_chat_publisher,
+      BotArmyLibraryRuntime.NATS.Publisher
+    )
   end
 
   defp publish(reply_to, result), do: reply(reply_to, reply_payload(result))

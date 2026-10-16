@@ -197,8 +197,21 @@ fitness.coach.chat   {"message": "what does the cable row work?"}
 * the consumer **`spawn`s** the handler, because the hop to the LLM bot is seconds long and the
   fitness subscriptions must not queue behind one question. `fitness.chat` still runs
   synchronously — the same wart, left for later;
-* the timeout is **20 s** (`@llm_timeout_ms`), against the persona's 8 s: a question that reads
-  the catalog, the method and her log is a bigger ask than a one-line persona reply.
+* **a slow local model is answered, not lost.** The question goes to `llm.prompt.submit` first —
+  the general local model, twenty seconds (`@llm_timeout_ms`, against the persona's eight: a
+  grounded question is a bigger ask than a one-line reply) — and a hop that fails or outlives
+  is handed to `BotArmyFitness.CoachJob` as a **backgrounded job** on the llm bot
+  (`llm.request.chat`, `"async" => true`, `model_type: "uncensored"`: the type whose promise is "a
+  local model, never a cloud provider", which is the promise her log needs). The job is waited
+  *on*, not *for* — `BotArmyFitness.JobBell` wakes the waiter when the llm bot rings
+  `events.llm.job.completed`, and the words are then **read** from `llm.job.status`. A bell is a
+  wake-up and never a proof (one that arrives before the result is stored, or on the other node's
+  queue-group member, must not be mistaken for the answer), and a bell that never comes is
+  survivable by design: the wait still polls, so an llm bot older than the async path behaves as
+  it did before. The budget is **five minutes** (`FITNESS_COACH_JOB_BUDGET_MS`, the fleet narrator's
+  number, operator-tunable without a release), and the panel's `@coach_timeout_ms` sits above the
+  whole two-lane budget. The wire is unchanged: an answer is still an answer and a failure is
+  still `llm_failed`.
 
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
 database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a

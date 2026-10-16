@@ -118,7 +118,7 @@ Deployment happens after:
 
 ## The rules this bot keeps
 
-Six of these are load-bearing; changing one silently changes coaching advice, so a change
+Seven of these are load-bearing; changing one silently changes coaching advice, so a change
 here is a change to what her body is told to do:
 
 1. **A movement is not a workout, and a set is not a workout log.** `fitness.workout.log`
@@ -151,6 +151,17 @@ here is a change to what her body is told to do:
 6. **`fitness.workout.today` is superseded, not deleted.** It answers a workout *type*
    derived from a user-id hash and the day of the year. New callers want
    `fitness.coach.today`; do not grow the old plan a catalog.
+7. **A slow model is waited for, and the fallback stays on this machine.** A question outlives
+   its fast lane more often than it fails one, so `CoachChatHandler` hands it to
+   `BotArmyFitness.CoachJob` rather than losing it: `llm.request.chat` with `"async" => true`, and
+   `model_type: "uncensored"` — the only type whose promise is "a local model, never a cloud
+   provider". Her log and the method are health-shaped facts; do not remove that field, and do not
+   substitute a type that may reach the cloud. The wait is on the job, not for it:
+   `BotArmyFitness.JobBell` is rung by the consumer on `events.llm.job.completed` and the words are
+   read afterwards from `llm.job.status`, because a bell carries no words and is never a proof.
+   The budget is `FITNESS_COACH_JOB_BUDGET_MS` (default five minutes) — the panel's wait is sized
+   above the whole two-lane budget, so shortening one without the other turns a slow answer into
+   "did not reply".
 
 ---
 

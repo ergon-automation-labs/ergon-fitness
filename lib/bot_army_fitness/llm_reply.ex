@@ -6,7 +6,8 @@ defmodule BotArmyFitness.LlmReply do
   grounded coach at `fitness.coach.chat`. Both send a prompt on `llm.prompt.submit` and both
   have to read whatever comes back, and "whatever comes back" is not one shape: the reply hop
   may hand back a raw body or an already-decoded map, and the model's text may sit under
-  `completion`, `response`, or `data.text` depending on which provider answered. Every one of
+  `completion`, `response`, `content`, or `data.text` depending on which provider or protocol
+  answered. Every one of
   those is a fact about the hop and not about fitness, so it lives here once rather than in
   each handler, where the two copies would drift and one of them would be the one that is
   wrong.
@@ -26,6 +27,9 @@ defmodule BotArmyFitness.LlmReply do
   @spec text(term()) :: {:ok, String.t()} | {:error, :invalid_response}
   def text(%{"completion" => text}) when is_binary(text) and text != "", do: {:ok, text}
   def text(%{"response" => text}) when is_binary(text) and text != "", do: {:ok, text}
+  # The chat job protocol's shape: `llm.request.chat` answers (and stores as a job's result) a
+  # response map whose words sit under `content`.
+  def text(%{"content" => text}) when is_binary(text) and text != "", do: {:ok, text}
 
   def text(%{"data" => %{"text" => text}}) when is_binary(text) and text != "",
     do: {:ok, text}

@@ -119,6 +119,12 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "LLM response parsed"
     },
     %{
+      subject: "events.llm.job.completed",
+      type: :subscribe,
+      description:
+        "the llm bot rings when a backgrounded chat job ends; the words are fetched by id, never carried here"
+    },
+    %{
       subject: "bot_army.fitness.intent.suggest_workout",
       type: :subscribe,
       description: "Intent: suggest workout"
@@ -415,6 +421,9 @@ defmodule BotArmyFitness.NATS.Consumer do
             :ok
         end
 
+      "llm.job.completed" ->
+        handle_job_bell(message)
+
       "discord.check_in.response" ->
         handle_check_in_response(message)
 
@@ -428,6 +437,18 @@ defmodule BotArmyFitness.NATS.Consumer do
 
   defp request_reply_subject?(subject) do
     Enum.any?(@subjects, fn %{subject: s, type: t} -> s == subject and t == :request_reply end)
+  end
+
+  # The llm bot's bell: a backgrounded job ended. It wakes whoever is waiting for that job id,
+  # and tells them nothing else — the waiter reads the result from the llm bot's store, because a
+  # bell is a wake-up and not a proof, and because the event deliberately carries no words. The
+  # ring is a registry dispatch, so the one consumer process is never blocked by a waiter.
+  defp handle_job_bell(%{"payload" => %{"job_id" => job_id}}) when is_binary(job_id) do
+    BotArmyFitness.JobBell.ring(job_id)
+  end
+
+  defp handle_job_bell(_message) do
+    Logger.warning("A job bell arrived without a job id")
   end
 
   defp decode_message(body, _subject, false) do
