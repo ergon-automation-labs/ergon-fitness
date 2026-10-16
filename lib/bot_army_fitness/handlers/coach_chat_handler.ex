@@ -36,7 +36,8 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
   about a second and that is the answer almost every time. If that hop fails or outlives its
   twenty seconds, the question is handed to `CoachJob` as a backgrounded job on the **local**
   uncensored model (`llm.request.chat`, `model_type: "uncensored"`), and this process waits for
-  the words — up to four minutes — reading `llm.job.status` each time the llm bot rings its bell.
+  the words — as long as the job's own patience allows, which is fifteen minutes by default
+  (`FITNESS_COACH_JOB_BUDGET_MS`) — reading `llm.job.status` each time the llm bot rings its bell.
   The wire is unchanged: an answer is still an answer and a failure is still `:llm_failed`, so a
   panel older than this behaviour simply times out where this one waits. Her words and her log
   are the reason the fallback is pinned local.

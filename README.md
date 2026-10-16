@@ -208,9 +208,10 @@ fitness.coach.chat   {"message": "what does the cable row work?"}
   wake-up and never a proof (one that arrives before the result is stored, or on the other node's
   queue-group member, must not be mistaken for the answer), and a bell that never comes is
   survivable by design: the wait still polls, so an llm bot older than the async path behaves as
-  it did before. The budget is **five minutes** (`FITNESS_COACH_JOB_BUDGET_MS`, the fleet narrator's
-  number, operator-tunable without a release), and the panel's `@coach_timeout_ms` sits above the
-  whole two-lane budget. The wire is unchanged: an answer is still an answer and a failure is
+  it did before. The budget is **fifteen minutes** (`FITNESS_COACH_JOB_BUDGET_MS`, operator-tunable
+  without a release) and it is a net for a *wedged* job rather than a guess at how long a model may
+  think: a slow local answer is waited for, not thrown away. The panel's `@coach_timeout_ms` sits
+  above the whole two-lane budget. The wire is unchanged: an answer is still an answer and a failure is
   still `llm_failed`.
 
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`

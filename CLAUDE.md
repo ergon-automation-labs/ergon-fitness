@@ -159,9 +159,10 @@ here is a change to what her body is told to do:
    substitute a type that may reach the cloud. The wait is on the job, not for it:
    `BotArmyFitness.JobBell` is rung by the consumer on `events.llm.job.completed` and the words are
    read afterwards from `llm.job.status`, because a bell carries no words and is never a proof.
-   The budget is `FITNESS_COACH_JOB_BUDGET_MS` (default five minutes) — the panel's wait is sized
-   above the whole two-lane budget, so shortening one without the other turns a slow answer into
-   "did not reply".
+   The budget is `FITNESS_COACH_JOB_BUDGET_MS` (default fifteen minutes) and it is a net for a
+   *wedged* job, not a guess at how long a model may think — a slow local answer is waited for. The
+   panel's wait is sized above the whole two-lane budget, so shortening one without the other turns
+   a slow answer into "did not reply".
 
 ---
 

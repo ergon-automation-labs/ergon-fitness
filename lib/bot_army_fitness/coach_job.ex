@@ -13,9 +13,17 @@ defmodule BotArmyFitness.CoachJob do
   for it forces the caller to invent a wall-clock deadline for work whose duration is unknowable,
   and a guess that is too small *silently* loses the answer. The job protocol separates the two:
   the submit returns a `job_id` immediately, and the wait becomes polling with a budget the
-  caller owns. This module's budget is `@job_budget_ms` (five minutes, and an operator can move it
-  with `FITNESS_COACH_JOB_BUDGET_MS`), which is what the panel's `@coach_timeout_ms` is sized to
-  cover.
+  caller owns.
+
+  ## The budget is a safety net, not a deadline
+
+  `@job_budget_ms` (fifteen minutes, and an operator can move it with
+  `FITNESS_COACH_JOB_BUDGET_MS`) is deliberately far above any honest generation. It exists to
+  stop a *wedged* job, not to guess how long the model may think: a local model that takes four
+  minutes is working, not failing, and hanging up on it would turn a slow answer into "did not
+  reply" — the same reason the llm bot's own `JobStore` keeps an hour of TTL. The panel's
+  `@coach_timeout_ms` is sized above this whole number, so the bot — which refuses in words when
+  it really cannot answer — is never the loser of a race it cannot see.
 
   ## Local-only by construction
 
@@ -46,10 +54,11 @@ defmodule BotArmyFitness.CoachJob do
   @submit_timeout_ms 20_000
   @status_timeout_ms 10_000
 
-  # How long the job may take before we stop being patient. The fleet's narrator waits five
-  # minutes for the same local lane (`WIFE_CARE_NARRATOR_JOB_BUDGET_MS`); an operator can move
-  # this one the same way, without a release, when the local model is slow.
-  @job_budget_ms 300_000
+  # How long the job may take before we stop being patient. This is a net for a job that has
+  # wedged, not a guess at how long a model may think: a cold local model answering for minutes is
+  # working, and the answer must not be thrown away for being slow. An operator can move it
+  # without a release (`FITNESS_COACH_JOB_BUDGET_MS`) when the local hardware is slower still.
+  @job_budget_ms 900_000
   @job_budget_env "FITNESS_COACH_JOB_BUDGET_MS"
   @poll_ms 2_000
 
