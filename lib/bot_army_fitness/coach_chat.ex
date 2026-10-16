@@ -97,8 +97,9 @@ defmodule BotArmyFitness.CoachChat do
   @doc """
   The facts, in the words the model may use: the gym, today's session, and her log.
 
-  `context` is a map with `:today` (a planned session, or `nil` when the rotation could not be
-  read), `:days_trained` (an integer, or `nil` for the same failure), and `:last` (the store's
+  `context` is a map with `:today` (a planned session, or `nil` when the session could not be
+  read), `:days_trained` (an integer, or `nil` for the same failure), `:date` (the house's own
+  day the session was read for, or `nil`), and `:last` (the store's
   `%{"day" => ..., "movements" => [...]}`, `nil` when she has kept nothing, or `:unreadable`).
   Each part is rendered independently, so one unreadable part never takes the others down.
   """
@@ -106,7 +107,11 @@ defmodule BotArmyFitness.CoachChat do
   def facts(context) when is_map(context) do
     [
       gym(),
-      method(Map.get(context, :today), Map.get(context, :days_trained)),
+      method(
+        Map.get(context, :today),
+        Map.get(context, :days_trained),
+        Map.get(context, :date)
+      ),
       log(Map.get(context, :last))
     ]
     |> Enum.reject(&is_nil/1)
@@ -177,22 +182,31 @@ defmodule BotArmyFitness.CoachChat do
 
   defp muscles_word(_groups), do: ""
 
-  # Today's method, and the honest sentence when the rotation could not be read. The day count
-  # is what turns the rotation, so it is said beside the session rather than left implicit.
-  defp method(nil, _days) do
+  # Today's method, and the honest sentence when the session could not be read. The day the
+  # session is for is said out loud: the card is labelled "today", the model is asked questions
+  # about "today's session", and a model given no day answers as if the plan were timeless. The
+  # day count rides beside it because it is a fact about her log worth knowing — it decides
+  # nothing here, and the sentence says so.
+  defp method(nil, _days, _date) do
     """
     TODAY'S SESSION — could not be read just now. Do not say what today's session is; if she
     asks, say the training log could not be read.
     """
   end
 
-  defp method(session, days) when is_map(session) do
+  defp method(session, days, date) when is_map(session) do
     """
-    TODAY'S SESSION — she has trained #{day_count(days)} days, so the rotation stands here
+    TODAY'S SESSION — #{day_words(date)}, in a four-session rotation that turns with the day.
+    She has trained #{day_count(days)} days so far; that count is a fact about her log and is
+    not what chooses this.
+
     #{session["label"]}
     #{Enum.map_join(session["slots"] || [], "\n", &slot_line/1)}
     """
   end
+
+  defp day_words(%Date{} = date), do: "the session the day #{Date.to_iso8601(date)} stands at"
+  defp day_words(_date), do: "the session the rotation stands at"
 
   defp day_count(days) when is_integer(days) and days >= 0, do: days
   defp day_count(_days), do: "an unknown number of"

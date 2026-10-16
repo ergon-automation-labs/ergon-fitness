@@ -5,6 +5,7 @@ defmodule BotArmyFitness.SchedulerTest do
 
   import Mox
 
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Scheduler
 
   setup :set_mox_global
@@ -151,7 +152,7 @@ defmodule BotArmyFitness.SchedulerTest do
 
       # Pinning "today" here would make this test rot; the property that matters is
       # that the newer Gregorian day wins, whatever it is relative to now.
-      expected = Date.diff(Date.utc_today(), newer)
+      expected = Date.diff(HouseholdDay.today(), newer)
 
       stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
         {:ok, [workout_on(older), workout_on(newer)]}
@@ -367,7 +368,7 @@ defmodule BotArmyFitness.SchedulerTest do
       %{
         "id" => id,
         "title" => "Run 5k",
-        "target_date" => Date.to_iso8601(Date.add(Date.utc_today(), 30)),
+        "target_date" => Date.to_iso8601(Date.add(HouseholdDay.today(), 30)),
         "status" => "active",
         "tenant_id" => "00000000-0000-0000-0000-000000000001"
       },
@@ -378,5 +379,5 @@ defmodule BotArmyFitness.SchedulerTest do
   defp workout(%Date{} = date), do: %{"id" => "w-#{date}", "date" => date}
   defp workout_on(%Date{} = date), do: %{"id" => "w-on-#{date}", "date" => date}
   defp workout_string(date), do: %{"id" => "w-#{date}", "date" => Date.to_iso8601(date)}
-  defp days_ago(days), do: Date.add(Date.utc_today(), -days)
+  defp days_ago(days), do: Date.add(HouseholdDay.today(), -days)
 end

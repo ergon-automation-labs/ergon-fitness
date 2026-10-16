@@ -2,7 +2,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
   @moduledoc "Generates daily fitness plans via LLM using workout history and comfort data."
 
   require Logger
-  alias BotArmyFitness.{CardioSessionStore, DailyPlanStore, PersonalExerciseStore}
+  alias BotArmyFitness.{CardioSessionStore, DailyPlanStore, HouseholdDay, PersonalExerciseStore}
   alias BotArmyLibraryRuntime.NATS.Publisher
 
   def handle_generate(message) do
@@ -189,7 +189,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
   end
 
   defp write_plan_to_para(_tenant_id, plan_data) do
-    date_str = Date.to_string(Date.utc_today())
+    date_str = Date.to_string(HouseholdDay.today())
     content = format_plan_markdown(plan_data, date_str)
 
     payload = %{
@@ -245,7 +245,7 @@ defmodule BotArmyFitness.Handlers.DailyPlanGeneratorHandler do
   end
 
   defp create_gtd_task(tenant_id, plan_data) do
-    date_str = Date.to_string(Date.utc_today())
+    date_str = Date.to_string(HouseholdDay.today())
     type = plan_data["type"] || "workout"
     minutes = plan_data["estimated_minutes"] || 45
 

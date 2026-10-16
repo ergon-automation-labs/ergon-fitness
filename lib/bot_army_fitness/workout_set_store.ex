@@ -42,6 +42,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
 
   import Ecto.Query
 
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Repo
   alias BotArmyFitness.Schemas.WorkoutSet
 
@@ -139,8 +140,8 @@ defmodule BotArmyFitness.WorkoutSetStore do
 
   The database counts the days rather than the caller counting rows, so the answer does
   not grow with her log. A day is a `date` column, which the store writes as the day the
-  set happened (`Date.utc_today()` when the caller does not say), the same convention the
-  scheduler counts from.
+  set happened (`BotArmyFitness.HouseholdDay.today/0` when the caller does not say) — the
+  house's own day, the one the scheduler counts from.
   """
   @impl true
   def distinct_days(tenant_id) when is_binary(tenant_id) do
@@ -219,14 +220,14 @@ defmodule BotArmyFitness.WorkoutSetStore do
   defp set_date(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do
       {:ok, date} -> date
-      {:error, _} -> Date.utc_today()
+      {:error, _} -> HouseholdDay.today()
     end
   end
 
-  # The day convention is this bot's (`Date.utc_today()`), the same one
+  # The day convention is this bot's (`BotArmyFitness.HouseholdDay`), the same one
   # `WorkoutStore.workout_date/1` uses, so "days since the last workout" cannot
   # disagree with itself about which day a set landed on.
-  defp set_date(_other), do: Date.utc_today()
+  defp set_date(_other), do: HouseholdDay.today()
 
   defp schema_to_map(%WorkoutSet{} = set) do
     %{

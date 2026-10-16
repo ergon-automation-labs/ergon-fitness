@@ -47,6 +47,7 @@ defmodule BotArmyFitness.Handlers.TodayPlanHandler do
   require Logger
 
   alias BotArmyFitness.DailyPlanStore
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Schemas.DailyPlan
   alias BotArmyFitness.WorkoutTypes
 
@@ -69,7 +70,7 @@ defmodule BotArmyFitness.Handlers.TodayPlanHandler do
         Logger.info("[TodayPlanHandler] Generating plan for #{tenant_id}")
 
         tenant_id
-        |> build_plan(user_id, Date.utc_today())
+        |> build_plan(user_id, HouseholdDay.today())
         |> format_response()
     end
   end

@@ -88,7 +88,7 @@ defmodule BotArmyFitness.Handlers.WorkoutPlanHandler do
   defp build_plan_prompt(goal, recent_workout_count) do
     days_remaining =
       case Date.from_iso8601(to_string(goal["target_date"])) do
-        {:ok, target_date} -> Date.diff(target_date, Date.utc_today())
+        {:ok, target_date} -> Date.diff(target_date, BotArmyFitness.HouseholdDay.today())
         _ -> nil
       end
 

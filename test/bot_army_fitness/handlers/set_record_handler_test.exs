@@ -5,6 +5,7 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
   import Mox
 
   alias BotArmyFitness.ExerciseCatalog
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Handlers.SetRecordHandler
 
   setup :set_mox_global
@@ -385,7 +386,7 @@ defmodule BotArmyFitness.Handlers.SetRecordHandlerTest do
       "amount" => payload["amount"],
       "load_kind" => payload["load_kind"],
       "load_value" => payload["load_value"],
-      "date" => Date.to_iso8601(Date.utc_today())
+      "date" => Date.to_iso8601(HouseholdDay.today())
     }
   end
 

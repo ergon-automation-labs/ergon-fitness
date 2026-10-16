@@ -4,6 +4,7 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
 
   import Mox
 
+  alias BotArmyFitness.Coach
   alias BotArmyFitness.Handlers.CoachChatHandler
 
   setup :set_mox_global
@@ -20,6 +21,10 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
   end
 
   setup do
+    # The day is this bot's own fact (`BotArmyFitness.HouseholdDay`), pinned to the method's
+    # anchor so the session in these tests is the same at midnight and in any zone.
+    Application.put_env(:bot_army_fitness, :household_today, fn -> Coach.rotation_anchor() end)
+
     {:ok, pid} =
       Agent.start_link(fn -> fn _subject, _payload -> flunk("no fake installed") end end)
 
@@ -31,6 +36,7 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
     on_exit(fn ->
       Application.delete_env(:bot_army_fitness, :coach_chat_publisher)
       Application.delete_env(:bot_army_fitness, :coach_job_publisher)
+      Application.delete_env(:bot_army_fitness, :household_today)
       if Process.alive?(pid), do: Agent.stop(pid)
     end)
 
@@ -53,7 +59,7 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
   end
 
   describe "context/1" do
-    test "gathers today's session, the day count that turns it, and her last day" do
+    test "gathers today's session, the day it is for, the day count beside it, and her last day" do
       stub(BotArmyFitness.WorkoutSetStoreMock, :distinct_days, fn @tenant ->
         {:ok, [~D[2026-10-05]]}
       end)
@@ -65,8 +71,11 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
 
       context = CoachChatHandler.context(@tenant)
 
+      # The count is read and travels — and it is beside the session, not what chooses it: the
+      # session here is the pinned day's (the anchor's), however many days the log holds.
       assert context.days_trained == 1
-      assert context.today["value"] == "pull_a"
+      assert context.date == Coach.rotation_anchor()
+      assert context.today["value"] == Coach.owed_on(Coach.rotation_anchor())["value"]
       assert context.today["slots"] != []
 
       # One entry per movement, and the store's `"exercise"` spelled as the movement's value
@@ -108,6 +117,7 @@ defmodule BotArmyFitness.Handlers.CoachChatHandlerTest do
 
       assert context.today == nil
       assert context.days_trained == nil
+      assert context.date == nil
       assert context.last["day"] == "2026-10-14"
     end
 

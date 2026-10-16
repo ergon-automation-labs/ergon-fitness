@@ -48,12 +48,16 @@ defmodule BotArmyFitness.CoachChatTest do
   end
 
   describe "facts/1" do
-    test "spells out today's session and the number the bot says to reach for" do
-      session = Coach.owed(0) |> Coach.plan(%{})
-      facts = CoachChat.facts(%{today: session, days_trained: 0, last: nil})
+    test "spells out today's session, the day it is for, and the number to reach for" do
+      day = Coach.rotation_anchor()
+      session = Coach.owed_on(day) |> Coach.plan(%{})
+      facts = CoachChat.facts(%{today: session, days_trained: 0, date: day, last: nil})
 
       assert facts =~ session["label"]
-      assert facts =~ "she has trained 0 days"
+      assert facts =~ "has trained 0 days so far"
+      # The day is named in the facts: the card is labelled "today", so the model is told which
+      # today the session belongs to instead of answering as if a plan were timeless.
+      assert facts =~ Date.to_iso8601(day)
       assert facts =~ "a press"
       assert facts =~ "works chest, front shoulders, triceps"
       # She has no history, so no movement has a number yet — and the silence is said aloud.
@@ -73,7 +77,7 @@ defmodule BotArmyFitness.CoachChatTest do
         ]
       }
 
-      session = Coach.owed(1) |> Coach.plan(history)
+      session = Coach.owed_on(Date.add(Coach.rotation_anchor(), 1)) |> Coach.plan(history)
       facts = CoachChat.facts(%{today: session, days_trained: 1, last: nil})
 
       assert facts =~ "Seated cable row (level"
@@ -108,6 +112,16 @@ defmodule BotArmyFitness.CoachChatTest do
       assert facts =~ "the last day she trained was 2026-10-14"
       assert facts =~ "Two-hand swing — 24.5 kg × 12 reps"
       assert facts =~ "Pull-up — 8 reps"
+    end
+
+    test "a session read without a day says so rather than naming one" do
+      # Deploy skew: a caller older than the `"date"` field hands the facts a context with no
+      # day. The model still gets the session; what it does not get is a date it could make up.
+      session = Coach.owed_on(Coach.rotation_anchor()) |> Coach.plan(%{})
+      facts = CoachChat.facts(%{today: session, days_trained: 0, last: nil})
+
+      assert facts =~ "the session the rotation stands at"
+      refute facts =~ "the session the day"
     end
 
     test "a log that could not be read is not the same fact as a log with nothing in it" do

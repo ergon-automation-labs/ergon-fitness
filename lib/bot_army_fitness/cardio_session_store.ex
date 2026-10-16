@@ -3,6 +3,7 @@ defmodule BotArmyFitness.CardioSessionStore do
 
   require Logger
   import Ecto.Query
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Repo
   alias BotArmyFitness.Schemas.CardioSession
 
@@ -14,7 +15,7 @@ defmodule BotArmyFitness.CardioSessionStore do
         comfort_rating \\ nil,
         notes \\ nil
       ) do
-    today = Date.utc_today()
+    today = HouseholdDay.today()
     pace_per_mile = distance_miles / (duration_minutes / 60.0)
 
     # Auto-adjust comfort based on pace/distance consistency
@@ -133,7 +134,7 @@ defmodule BotArmyFitness.CardioSessionStore do
   end
 
   def list_recent(tenant_id, days) do
-    cutoff = Date.add(Date.utc_today(), -days)
+    cutoff = Date.add(HouseholdDay.today(), -days)
 
     try do
       sessions =

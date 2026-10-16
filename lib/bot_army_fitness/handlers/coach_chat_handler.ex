@@ -3,7 +3,7 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
   The coach, asked a question: `fitness.coach.chat`.
 
   One hop from her question to an answer that is grounded in this gym. The handler gathers the
-  three things `BotArmyFitness.CoachChat` needs — the session the rotation owes, her own next
+  three things `BotArmyFitness.CoachChat` needs — the session the day stands at, her own next
   numbers, and her last training day — builds the message, and asks the LLM bot for a reply.
 
   ## Why this is not `fitness.chat`
@@ -45,7 +45,16 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
 
   require Logger
 
-  alias BotArmyFitness.{Coach, CoachChat, CoachJob, LlmReply, Scheduler, WorkoutSetStore}
+  alias BotArmyFitness.{
+    Coach,
+    CoachChat,
+    CoachJob,
+    HouseholdDay,
+    LlmReply,
+    Scheduler,
+    WorkoutSetStore
+  }
+
   alias BotArmyLibraryCore.Tenant
   alias BotArmyLibraryRuntime.NATS.Reply
 
@@ -134,17 +143,19 @@ defmodule BotArmyFitness.Handlers.CoachChatHandler do
   @doc false
   def context(tenant_id) do
     last = last_session(tenant_id)
+    date = HouseholdDay.today()
 
     case days_trained() do
-      {:ok, days} when is_integer(days) ->
+      {:ok, days} when is_integer(days) and days >= 0 ->
         %{
-          today: today(tenant_id, Coach.owed(days), days),
+          today: today(tenant_id, Coach.owed_on(date), days),
           days_trained: days,
+          date: date,
           last: last
         }
 
       _other ->
-        %{today: nil, days_trained: nil, last: last}
+        %{today: nil, days_trained: nil, date: nil, last: last}
     end
   end
 

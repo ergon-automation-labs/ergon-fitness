@@ -102,36 +102,74 @@ defmodule BotArmyFitness.CoachTest do
     end
   end
 
-  describe "owed/1" do
-    test "counts training days, not calendar days: the fifth day is the first session again" do
-      assert Coach.owed(0)["value"] == "push_a"
-      assert Coach.owed(1)["value"] == "pull_a"
-      assert Coach.owed(2)["value"] == "push_b"
-      assert Coach.owed(3)["value"] == "pull_b"
-      assert Coach.owed(4)["value"] == "push_a"
-      assert Coach.owed(9)["value"] == "pull_a"
+  describe "position/1 and owed_on/1" do
+    # The rotation is turned by a day, so these tests read the anchor out of the module rather
+    # than restating it: the anchor is allowed to move, and what must not move is that the
+    # anchor's own day is the first session.
+    test "the anchor's day is the first session, and the four come round with the calendar" do
+      anchor = Coach.rotation_anchor()
+
+      assert Coach.position(anchor) == 0
+      assert Coach.owed_on(anchor)["value"] == "push_a"
+
+      days = for offset <- 0..4, do: Date.add(anchor, offset)
+
+      assert Enum.map(days, &Coach.owed_on(&1)["value"]) ==
+               ~w(push_a pull_a push_b pull_b push_a)
+
+      assert Enum.map(days, &Coach.position/1) == [0, 1, 2, 3, 0]
     end
 
-    test "answers the same session for the same count, however large the count" do
-      assert Coach.owed(40) == Coach.owed(0)
-      assert Coach.owed(40)["value"] == "push_a"
+    test "the day turns it: tomorrow is a different session with nothing trained in between" do
+      # The whole point of the change. `days_trained` no longer appears in the rule at all, so
+      # a rest day moves the method on — which is what a card labelled "today's session"
+      # promises. The test says it in the shape the bug was reported in: same log, new day.
+      day = Coach.rotation_anchor()
+
+      assert Coach.owed_on(day) != Coach.owed_on(Date.add(day, 1))
     end
 
-    test "refuses a day count it cannot have counted" do
-      # A failed read must not look like a fresh log. `nil` is the answer for anything that
-      # is not a whole number of days, and the handler turns that into a read failure rather
-      # than into "Push A".
-      assert Coach.owed(nil) == nil
-      assert Coach.owed(-1) == nil
-      assert Coach.owed(1.5) == nil
-      assert Coach.owed("4") == nil
-      assert Coach.owed(:four) == nil
+    test "a day before the anchor wraps to the end of the rotation, not behind it" do
+      # `rem/2` answers -1 here, and `Enum.at/2` reads -1 as *the last* session — the right
+      # answer by accident, and the wrong one the moment the rotation holds something else.
+      # The day is wrapped with `Integer.mod/2`, and this is where that is pinned.
+      day_before = Date.add(Coach.rotation_anchor(), -1)
+
+      assert Coach.position(day_before) == 3
+      assert Coach.owed_on(day_before)["value"] == "pull_b"
+    end
+
+    test "the answer is a function of the day alone, however far from the anchor it is" do
+      anchor = Coach.rotation_anchor()
+
+      assert Coach.owed_on(Date.add(anchor, 40)) == Coach.owed_on(anchor)
+      assert Coach.owed_on(Date.add(anchor, 41)) == Coach.owed_on(Date.add(anchor, 1))
+    end
+
+    test "the anchor keeps Push A on the day the old counting rule was answering" do
+      # Not a rule of the method — a rule of the migration. 2026-10-16 was the day the
+      # day-count rule stood on Push A, and the anchor was chosen so the card answered the
+      # same session the day it changed hands.
+      assert Date.diff(~D[2026-10-16], Coach.rotation_anchor()) |> Integer.mod(4) == 0
+    end
+
+    test "refuses a day it cannot read" do
+      # A failed read must not look like the anchor's day. `nil` is the answer for anything
+      # that is not a `Date`, and the handler turns that into a read failure rather than into
+      # "Push A".
+      assert Coach.owed_on(nil) == nil
+      assert Coach.owed_on("2026-01-01") == nil
+      assert Coach.owed_on(~N[2026-01-01 09:00:00]) == nil
+      assert Coach.owed_on(:today) == nil
+
+      assert Coach.position(nil) == nil
+      assert Coach.position(1) == nil
     end
   end
 
   describe "plan/2" do
     setup do
-      %{session: Coach.owed(0)}
+      %{session: Coach.owed_on(Coach.rotation_anchor())}
     end
 
     test "offers every movement of every slot, even with nothing in her log", %{session: session} do
@@ -266,7 +304,7 @@ defmodule BotArmyFitness.CoachTest do
     test "a session it cannot read is nil, not a plan" do
       assert Coach.plan(nil, %{}) == nil
       assert Coach.plan("push_a", %{}) == nil
-      assert Coach.plan(Coach.owed(0), :not_a_history) == nil
+      assert Coach.plan(Coach.owed_on(Coach.rotation_anchor()), :not_a_history) == nil
     end
   end
 end

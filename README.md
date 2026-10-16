@@ -109,7 +109,7 @@ what it is there to work and offering the movements that fit:
 
 ```
 fitness.coach.today   {}
-  -> {"rotation": {"length": 4, "position": 1, "days_trained": 5},
+  -> {"rotation": {"length": 4, "position": 1, "days_trained": 5, "date": "2026-10-16"},
       "session": {"value": "pull_a", "label": "Pull A — width first",
                   "groups": [...], "slots": [{"slot": "a press", "sets": 3,
                     "works": [...], "recent": "lat_pulldown",
@@ -118,10 +118,21 @@ fitness.coach.today   {}
                                    "next": {...} | "top" | null}]}]}}
 ```
 
-* the rotation turns on **training days**, not the calendar: `rem(days_trained, 4)`,
-  so a missed week does not skip a session. `Scheduler.training_days/0` counts
-  distinct days across both logs — a day with three sets is one day — and a failed
-  read is an error, never a shorter history;
+* the rotation turns on the **calendar**, not on training days: `position/1` is
+  `Integer.mod(Date.diff(date, @rotation_anchor), 4)` with the anchor at `2026-01-01`, so a
+  missed week does **not** hand her the same session twice — the session she owes herself is
+  today's session, and `fitness.coach.today` answers what today holds. `Integer.mod/2` and not
+  `rem/2`: `rem(-1, 4)` is `-1`, and `Enum.at(list, -1)` would silently read the *last*
+  session. A date that is not a `Date` answers `nil` rather than session one;
+* `days_trained` is still counted and still sent — she has trained it, and a card may say so —
+  but it decides nothing. `Scheduler.training_days/0` counts distinct days across both logs (a
+  day with three sets is one day), and a failed read is an error, never a shorter history;
+  it is a **hard prerequisite** of the answer: a day count that cannot be read is `read_failed`,
+  never a session;
+* the day is read **once per answer** (`HouseholdDay.today/0` in `CoachTodayHandler`) and every
+  field is built from that one value, and the reply says which day it answered for in
+  `rotation.date`. Reading the clock again beside each field could name one day and send the
+  session of another;
 * nothing is chosen for her. Every movement a slot offers travels with **her own**
   `next` number, straight from `Progression.next_load/1`, and the one movement named
   in `recent` is a fact read back from her log rather than a pick. Ties keep the
@@ -135,6 +146,23 @@ fitness.coach.today   {}
   hatch;
 * `fitness.workout.today` still answers, and is **superseded**: it names a workout
   *type* from a hash of the user id and the day of the year, and no movement.
+
+### The day is the house's day, not UTC's
+
+`BotArmyFitness.HouseholdDay` is the bot's one answer to "what day is it" — today it is
+`:calendar.local_time()`, the host's own zone, read through `HouseholdDay.today/0` (the boot log
+prints it beside its offset: `Fitness bot day: 2026-10-16 (local offset -6h from UTC)`). Every
+`Date.utc_today/0` in `lib/` was replaced by it: a bot that stamped 18:00 MDT on tomorrow's date
+would disagree with her about what "today" means for six hours every evening, and two conventions
+in one bot is a defect rather than a nuance. A test in `household_day_test.exs` searches `lib/` for
+the paren form and fails if any file — including `household_day.ex` itself — still asks the UTC
+clock this question. The day is read once per answer; a handler that read it per field could name
+one day and send the session of another. The fleet carries no IANA database on purpose: the
+`tzdata` dependency, its compile-time download and a compile-time zone database config are a
+heavier trade than an offset the runtime host already knows. The residual risk is honest and
+small — if one instance of this bot ran outside the household's zone, the queue group would
+balance presses between two bots that disagree about the date for part of the day; the boot log
+is what makes that discoverable.
 
 `fitness.coach.last` is a read of her **log**, not of the method — the third question the
 Fitness tab asks, and one no list could answer, because `fitness.set.list`'s page is ten

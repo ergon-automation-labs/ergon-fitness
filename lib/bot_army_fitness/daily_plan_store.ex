@@ -3,11 +3,12 @@ defmodule BotArmyFitness.DailyPlanStore do
 
   require Logger
   import Ecto.Query
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Repo
   alias BotArmyFitness.Schemas.DailyPlan
 
   def get_today(tenant_id) do
-    today = Date.utc_today()
+    today = HouseholdDay.today()
 
     case Repo.get_by(DailyPlan, tenant_id: tenant_id, date: today) do
       nil -> {:error, :not_found}
@@ -16,7 +17,7 @@ defmodule BotArmyFitness.DailyPlanStore do
   end
 
   def create_plan(tenant_id, plan_data) do
-    today = Date.utc_today()
+    today = HouseholdDay.today()
 
     plan_attrs = %{
       tenant_id: tenant_id,

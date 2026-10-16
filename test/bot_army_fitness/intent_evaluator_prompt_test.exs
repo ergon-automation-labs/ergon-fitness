@@ -4,7 +4,7 @@ defmodule BotArmyFitness.IntentEvaluatorPromptTest do
 
   import Mox
 
-  alias BotArmyFitness.IntentEvaluator
+  alias BotArmyFitness.{HouseholdDay, IntentEvaluator}
 
   setup :set_mox_global
 
@@ -142,7 +142,7 @@ defmodule BotArmyFitness.IntentEvaluatorPromptTest do
       stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant -> {:ok, []} end)
 
       stub(BotArmyFitness.WorkoutSetStoreMock, :recent, fn _tenant, _limit ->
-        {:ok, [%{"id" => "s-1", "date" => Date.utc_today()}]}
+        {:ok, [%{"id" => "s-1", "date" => HouseholdDay.today()}]}
       end)
 
       assert IntentEvaluator.handle_propose_social_check_in_action(
@@ -156,7 +156,7 @@ defmodule BotArmyFitness.IntentEvaluatorPromptTest do
 
     test "a workout logged today is not an invitation" do
       stub(BotArmyFitness.WorkoutStoreMock, :list, fn _tenant ->
-        {:ok, [%{"id" => "w-1", "date" => Date.utc_today()}]}
+        {:ok, [%{"id" => "w-1", "date" => HouseholdDay.today()}]}
       end)
 
       assert IntentEvaluator.handle_propose_social_check_in_action(

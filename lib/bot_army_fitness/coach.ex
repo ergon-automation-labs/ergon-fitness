@@ -8,15 +8,23 @@ defmodule BotArmyFitness.Coach do
   before anyone wrote anything down. This module is the method, and it is deliberately
   small: **four sessions, six slots each, and the numbers are hers.**
 
-  ## The rotation turns on training days, not on the calendar
+  ## The rotation turns with the day
 
-  `owed/1` takes the number of days she has trained — `BotArmyFitness.Scheduler`'s count
-  of distinct days across the workout log and the set log — and answers the session at
-  that position in the rotation. Nothing here reads a clock or a week boundary, and that
-  is the whole point: a rotation that turned on the calendar would skip a session every
-  time a week went sideways, and the session a person owes herself is the next one, not
-  the one a Tuesday happened to want. Train four times and you have been through the
-  rotation once, whether that took four days or four weeks.
+  `owed_on/1` takes the day being asked about — the house's own day,
+  `BotArmyFitness.HouseholdDay.today/0` — and answers the session that day stands at. The
+  four come round with the calendar from a fixed anchor, so "today's session" is a
+  different session tomorrow whatever she did today: a card that says *today* answers the
+  day it is opened on.
+
+  This was a count of training days once, and the reversal was deliberate. A day-count
+  rotation answered the same session every morning until she trained, which is a true
+  reading of "the next session she owes herself" — but it is not what *today's session*
+  means to the person reading the card. She asked for the session to turn when the day
+  turns, and that is a requirement about the card, not a claim about the method: the
+  method is four sessions and this is which one today stands at.
+
+  The count of days she has trained still travels beside the session, because it is a
+  true fact about her and the card says it. It no longer decides anything.
 
   ## A slot is what a session is for; the movements fill it
 
@@ -36,8 +44,8 @@ defmodule BotArmyFitness.Coach do
 
   No streak, no count, no percentage, no "you missed". A session is a proposal with the
   movements already hers. She may do the whole thing, one slot of it, or something else
-  entirely, and the next training day the rotation turns by exactly one either way —
-  because a method that punished a partial day would be a boss, and this is a house.
+  entirely, and the day turns the rotation either way — because a method that punished a
+  partial day would be a boss, and this is a house.
   """
 
   alias BotArmyFitness.ExerciseCatalog
@@ -48,6 +56,14 @@ defmodule BotArmyFitness.Coach do
   # is the method's number and not hers — the count she presses and the load she loads
   # are the only numbers that come from her.
   @sets 3
+
+  # Which day the first session is for. Any fixed date would do — the rotation only needs
+  # an origin to count days from — and a fixed one is the point: an anchor that moved (to
+  # the day the log was first read, say) would make "today's session" a function of when
+  # the bot last started. 2026-01-01 is the day this method was written down, and with it
+  # Push A falls on 2026-10-16 — the session the day-count rule was answering the day the
+  # rule changed, so nothing about the card jumped when it did.
+  @rotation_anchor ~D[2026-01-01]
 
   # Six slots is the ceiling a card can hold and a person can read on a bad morning. The
   # menu is long on purpose (it is a vocabulary, and it is `ExerciseCatalog`'s job to be
@@ -245,18 +261,43 @@ defmodule BotArmyFitness.Coach do
   def session_count, do: length(@sessions)
 
   @doc """
-  The session she is owed, from the number of days she has trained.
+  Where the rotation stands on `date`: an index into `sessions/0`.
 
-  The count is `BotArmyFitness.Scheduler`'s, not this module's: it is a fact about the
-  log, and this module only turns it into a session. Answers `nil` for a count that is
-  not a whole number of days — a caller that cannot say how many days she has trained
-  has a failed read, and a failed read must not be read as "session one".
+  `Integer.mod/2` rather than `rem/2` on purpose: a day before the anchor wraps to the
+  end of the rotation, while `rem/2` would answer `-1`, which `Enum.at/2` reads as *the
+  last session* — the right answer by accident, and the wrong answer the moment the
+  rotation holds a session it does not hold now.
+
+  Answers `nil` for anything that is not a `Date`: a caller that cannot say which day it
+  is asking about has a failed read, and a failed read must not be read as "session
+  one".
   """
-  @spec owed(term()) :: map() | nil
-  def owed(days_trained) when is_integer(days_trained) and days_trained >= 0,
-    do: Enum.at(@sessions, rem(days_trained, length(@sessions)))
+  @spec position(term()) :: non_neg_integer() | nil
+  def position(%Date{} = date),
+    do: Integer.mod(Date.diff(date, @rotation_anchor), length(@sessions))
 
-  def owed(_days_trained), do: nil
+  def position(_date), do: nil
+
+  @doc """
+  The session the day `date` stands at.
+
+  The day is `BotArmyFitness.HouseholdDay`'s, not this module's: this module only turns a
+  day into a session. Answers `nil` for anything that is not a `Date`, for the same
+  reason `position/1` does.
+  """
+  @spec owed_on(term()) :: map() | nil
+  def owed_on(%Date{} = date), do: Enum.at(@sessions, position(date))
+
+  def owed_on(_date), do: nil
+
+  @doc """
+  The day the rotation counts from.
+
+  With `position/1`, a caller can say what an index means without restating the anchor: the
+  session is `Enum.at(sessions(), position(date))`, and the day it is for is the day.
+  """
+  @spec rotation_anchor() :: Date.t()
+  def rotation_anchor, do: @rotation_anchor
 
   @doc """
   One session with every slot filled: the movements each slot offers, and the set to

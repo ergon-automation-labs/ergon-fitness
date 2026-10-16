@@ -37,6 +37,7 @@ defmodule BotArmyFitness.WorkoutStore do
 
   import Ecto.Query
 
+  alias BotArmyFitness.HouseholdDay
   alias BotArmyFitness.Repo
   alias BotArmyFitness.Schemas.Workout
 
@@ -184,16 +185,16 @@ defmodule BotArmyFitness.WorkoutStore do
     end
   end
 
-  defp workout_date(nil), do: Date.utc_today()
+  defp workout_date(nil), do: HouseholdDay.today()
 
   defp workout_date(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do
       {:ok, date} -> date
-      {:error, _} -> Date.utc_today()
+      {:error, _} -> HouseholdDay.today()
     end
   end
 
-  defp workout_date(_), do: Date.utc_today()
+  defp workout_date(_), do: HouseholdDay.today()
 
   # Helper function to convert Ecto schema to map for callers
   defp schema_to_map(%Workout{} = workout) do

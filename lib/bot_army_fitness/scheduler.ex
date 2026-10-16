@@ -20,7 +20,7 @@ defmodule BotArmyFitness.Scheduler do
 
   require Logger
 
-  alias BotArmyFitness.{GoalStore, WorkoutSetStore, WorkoutStore}
+  alias BotArmyFitness.{GoalStore, HouseholdDay, WorkoutSetStore, WorkoutStore}
   alias BotArmyLibraryCore.Tenant
 
   # "Never worked out" sentinel — deliberately past the "urgent" tier (7+) so a
@@ -73,9 +73,11 @@ defmodule BotArmyFitness.Scheduler do
       this feeds must not be sent because a database hiccup looked like a streak of
       misses.
 
-  Days are counted against `Date.utc_today()`, the day convention this bot already
-  uses for workout dates (see `BotArmyFitness.WorkoutStore.workout_date/1`); it is
-  not the household's local midnight.
+  Days are counted against `BotArmyFitness.HouseholdDay.today/0` — the house's own
+  day, the one the set and workout stores stamp their rows with (see
+  `BotArmyFitness.WorkoutStore.workout_date/1`). A bot counting against UTC would
+  change its day at six in the evening for this house, so "days since the last
+  workout" would gain a day while she was still living the old one.
   """
   def days_since_last_workout do
     try do
@@ -130,7 +132,7 @@ defmodule BotArmyFitness.Scheduler do
   end
 
   # A set is day-stamped by the store on the same convention a workout is
-  # (`Date.utc_today()`), and the field is `date` on both rows, so one reader serves both.
+  # (`HouseholdDay.today/0`), and the field is `date` on both rows, so one reader serves both.
   defp record_date(record), do: workout_date(record)
 
   defp build_reminders(goals, last_training_date) when is_list(goals) do
@@ -232,6 +234,6 @@ defmodule BotArmyFitness.Scheduler do
   # against today, and anything unreadable (nil, a malformed row) collapses to the
   # never-worked-out sentinel rather than being reported as "today".
   def days_since(nil), do: @never_worked_out
-  def days_since(%Date{} = date), do: Date.diff(Date.utc_today(), date)
+  def days_since(%Date{} = date), do: Date.diff(HouseholdDay.today(), date)
   def days_since(_other), do: @never_worked_out
 end

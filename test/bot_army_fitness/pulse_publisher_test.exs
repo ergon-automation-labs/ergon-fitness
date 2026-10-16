@@ -5,7 +5,7 @@ defmodule BotArmyFitness.PulsePublisherTest do
 
   import Mox
 
-  alias BotArmyFitness.PulsePublisher
+  alias BotArmyFitness.{HouseholdDay, PulsePublisher}
   alias BotArmyLibraryCore.NATS.Decoder
 
   setup :set_mox_global
@@ -26,7 +26,7 @@ defmodule BotArmyFitness.PulsePublisherTest do
 
   describe "build_pulse_payload/1" do
     test "carries the days since the last workout, read from the store" do
-      stub_workouts({:ok, [%{"id" => "w-1", "date" => Date.add(Date.utc_today(), -6)}]})
+      stub_workouts({:ok, [%{"id" => "w-1", "date" => Date.add(HouseholdDay.today(), -6)}]})
 
       observations = PulsePublisher.build_pulse_payload(idle_metrics())["observations"]
 

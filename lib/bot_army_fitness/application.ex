@@ -14,10 +14,22 @@ defmodule BotArmyFitness.Application do
 
   use Application
 
+  require Logger
+
   @env Mix.env()
 
   @impl true
   def start(_type, _args) do
+    # The house's own day, said out loud at boot. Every day this bot files and every "days
+    # since" it counts comes from `BotArmyFitness.HouseholdDay`, so a host whose clock is not
+    # in the household's zone would answer the wrong day for the six hours after the two zones
+    # part company — and nothing else would say so. This line is the evidence, and the offset
+    # is what a reader compares against the house's own zone.
+    Logger.info(
+      "Fitness bot day: #{Date.to_iso8601(BotArmyFitness.HouseholdDay.today())} " <>
+        "(local offset #{BotArmyFitness.HouseholdDay.offset_hours()}h from UTC)"
+    )
+
     children =
       [BotArmyFitness.JobBell]
       |> maybe_add_repo()

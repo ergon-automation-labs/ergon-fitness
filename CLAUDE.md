@@ -142,16 +142,27 @@ here is a change to what her body is told to do:
    every read it could not make as an explicit "could not be read just now — do not say
    what it is" line, so no hiccup can be answered as "she has kept nothing".
 5. **The coach is pure and chooses nothing for her.** `BotArmyFitness.Coach` reads no store
-   and no clock; its rotation turns on training days (not the calendar), and every
-   movement travels with her own `next` number beside it. `recent` names a fact from her
-   log, not a pick. Progression is `BotArmyFitness.Progression`'s — do not re-derive it
-   here or on a surface. The chat keeps this rule too: its reply carries **text and no
-   movement** — no `stage`, no `offer` — and `CoachChat.system_prompt/0` tells the model in
-   words not to choose a session or a movement for her and not to set a number for her.
-6. **`fitness.workout.today` is superseded, not deleted.** It answers a workout *type*
+   and no clock; its rotation turns on the **calendar** — `position/1` is
+   `Integer.mod(Date.diff(date, @rotation_anchor), 4)` around `2026-01-01`, so a missed week
+   does not hand her the same session twice — and every movement travels with her own `next`
+   number beside it. `recent` names a fact from her log, not a pick. Progression is
+   `BotArmyFitness.Progression`'s — do not re-derive it here or on a surface. The chat keeps
+   this rule too: its reply carries **text and no movement** — no `stage`, no `offer` — and
+   `CoachChat.system_prompt/0` tells the model in words not to choose a session or a movement
+   for her and not to set a number for her.
+6. **`BotArmyFitness.HouseholdDay` is the only answer to "what day is it", and it is the
+   host's day.** `Date.utc_today/0` must not appear under `lib/` — `household_day_test.exs`
+   searches for it and fails. The bot's day and her clock then agree; a UTC day stamped at
+   18:00 MDT would put her evening on tomorrow, and two conventions in one bot is a defect
+   rather than a nuance. Read the day **once per answer** (`date = HouseholdDay.today()`), build
+   every field from that one value, and send it — `rotation.date` says which day the answer is
+   for, so a surface can label a card with the bot's day instead of its own. Do not add `tzdata`
+   to learn an offset the runtime host already knows; the residual risk (an instance outside the
+   household's zone) is made discoverable by the boot log line, not by a dependency.
+7. **`fitness.workout.today` is superseded, not deleted.** It answers a workout *type*
    derived from a user-id hash and the day of the year. New callers want
    `fitness.coach.today`; do not grow the old plan a catalog.
-7. **A slow model is waited for, and the fallback stays on this machine.** A question outlives
+8. **A slow model is waited for, and the fallback stays on this machine.** A question outlives
    its fast lane more often than it fails one, so `CoachChatHandler` hands it to
    `BotArmyFitness.CoachJob` rather than losing it: `llm.request.chat` with `"async" => true`, and
    `model_type: "uncensored"` — the only type whose promise is "a local model, never a cloud

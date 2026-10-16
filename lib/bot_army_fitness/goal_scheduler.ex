@@ -61,7 +61,7 @@ defmodule BotArmyFitness.GoalScheduler do
       date_str ->
         case Date.from_iso8601(date_str) do
           {:ok, target_date} ->
-            days_remaining = Date.diff(target_date, Date.utc_today())
+            days_remaining = Date.diff(target_date, BotArmyFitness.HouseholdDay.today())
             days_remaining > 0 && days_remaining <= 7
 
           _ ->
@@ -92,7 +92,7 @@ defmodule BotArmyFitness.GoalScheduler do
 
   defp days_until_target(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do
-      {:ok, target_date} -> Date.diff(target_date, Date.utc_today())
+      {:ok, target_date} -> Date.diff(target_date, BotArmyFitness.HouseholdDay.today())
       _ -> nil
     end
   end
