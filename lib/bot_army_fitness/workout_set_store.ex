@@ -32,6 +32,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
   - `for_exercise/3` — one movement's sets, newest first (limit)
   - `newest_per_exercise/2` — the newest set of each of several movements, in one read
   - `distinct_days/1` — the days she trained, one per day
+  - `since/2` — a tenant's sets on or after a day, oldest first
   - `recent_day/1` — the sets of her most recent training day, newest first, or `nil`
   - `clear/0` — delete every set (tests and tooling; genuinely destructive)
   """
@@ -93,6 +94,24 @@ defmodule BotArmyFitness.WorkoutSetStore do
      |> where([s], s.tenant_id == ^tenant_id)
      |> order_by([s], desc: s.date, desc: s.inserted_at)
      |> limit(^normalise_limit(limit))
+     |> Repo.all()
+     |> Enum.map(&schema_to_map/1)}
+  end
+
+  @doc """
+  A tenant's sets on or after a day, oldest first.
+
+  The read behind a graph. `recent/2` is bounded by a *count* because a card draws ten of
+  them; a chart is bounded by a **window**, because a bar is a week and ten rows is not a
+  week. The day is inclusive, so the first bucket's own boundary is in its own bucket,
+  and the ordering is ascending so the caller draws left to right without sorting.
+  """
+  @impl true
+  def since(tenant_id, %Date{} = since) when is_binary(tenant_id) do
+    {:ok,
+     WorkoutSet
+     |> where([s], s.tenant_id == ^tenant_id and s.date >= ^since)
+     |> order_by([s], asc: s.date, asc: s.inserted_at)
      |> Repo.all()
      |> Enum.map(&schema_to_map/1)}
   end

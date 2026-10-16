@@ -242,6 +242,42 @@ fitness.coach.chat   {"message": "what does the cable row work?"}
   above the whole two-lane budget. The wire is unchanged: an answer is still an answer and a failure is
   still `llm_failed`.
 
+`fitness.graph.series` answers **every graph this bot can draw**, in one reply, and draws none of them —
+the surface asks once and chooses which one to show. One subject rather than one per chart, because
+five subjects would be five ways to ask one question, and because the menu *is* the answer: a page
+that had to know a series' id before it could ask for it would be a second place that decides which
+graphs exist.
+
+```
+fitness.graph.series   {}
+  -> {"ok": true, "data": {"count": 5, "window_days": 84,
+      "graphs": [{"id": "fitness.sets.week", "title": "Sets kept", "unit": "sets",
+                   "kind": "bars", "note": "each bar is one week, the last twelve",
+                   "points": [{"label": "Sep 28", "value": 2}, ...]}, ...]}}
+```
+
+* **five series, and none of them counts anything for her**: the days she trained, the sets she
+  kept, the load trend, and cardio miles and minutes, all over twelve weeks (`window_days/0` = 84).
+  A series her log cannot fill yet still travels, with the same week labels and zeros, because a
+  graph she could only discover by accident is worse than a menu with an empty row in it — the
+  *drawing* is the page's decision, and an empty series is not drawn at all (§67 of
+  `docs/wife_care/PANELS.md`);
+* **the window is a window, not a page.** `WorkoutSetStore.since/2` (a callback beside `recent/2`)
+  reads exactly the days the labels describe, so a chart of the last twelve weeks is of the last
+  twelve weeks and not of the newest ten rows — and the buckets are **this bot's**
+  (`Graphs.week_buckets/2`, Monday-started, `"%b %-d"`), so a surface cannot disagree about which day
+  a set landed in. The window bound is checked against the bucket **count** (`Integer.floor_div/2`
+  plus an index range) and not against the last bucket's start date: comparing dates dropped a set
+  kept today, found live on 2026-10-16;
+* **no cross-movement number exists here, and no chart in this bot will ever draw one.** A load in
+  this house is a **setting of one piece** and is never normalised — a MaxPRO resistance *level* out
+  of 25 is not a smaller kilogram than a dumbbell — so the load trend plots **one movement against
+  itself over time** and names that movement and its unit in its own title. "Barbell weight
+  comparisons" across movements, and volume (sets × reps × load), are deliberately absent, and the
+  reason is written down in `BotArmyFitness.Graphs`'s moduledoc;
+* a store that cannot be read is `read_failed`, never a menu of empty series: "she has kept nothing"
+  and "nobody could read the log" are different sentences, and only one of them may be drawn.
+
 A note on the two nodes: air and mini each keep their **own** `ergon_fitness`
 database (measured 2026-10-14: air held 1 workout, mini held 0). Mini's copy is a
 standby that starts empty, so a failover to mini loses her history until the data

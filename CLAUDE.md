@@ -83,6 +83,11 @@ The bot listens to and publishes:
   caller; an off-ladder load is refused (`load_not_on_ladder`), not rounded. Its
   reply also carries `next` (`BotArmyFitness.Progression`), the set to reach for
   next, and `fitness.set.list` reads the recorded sets back.
+- `fitness.graph.series` - Every graph this bot can draw from her log, in one reply: the days she
+  trained, the sets she kept, the load trend, and the two cardio series, over twelve weeks
+  (`Graphs.window_days/0` = 84), each with its own points, kind and unit. It draws nothing and counts
+  nothing — the menu is the answer, and the page picks one. A store that cannot be read is
+  `read_failed`, never a menu of empty series.
 - `fitness.exercise.*` - Exercise operations
 - `fitness.goal.*` - Goal tracking
 
@@ -174,6 +179,19 @@ here is a change to what her body is told to do:
    *wedged* job, not a guess at how long a model may think — a slow local answer is waited for. The
    panel's wait is sized above the whole two-lane budget, so shortening one without the other turns
    a slow answer into "did not reply".
+
+9. **A graph is a picture of her log and never a score.** `BotArmyFitness.Graphs` answers the whole
+   menu in one reply (`fitness.graph.series`) because which series exist, which weeks they cover and
+   what a number means are facts about *this* gym; the page scales points into SVG and decides
+   nothing. Two rules ride on it. **Nothing is normalised across pieces** — a MaxPRO resistance
+   level out of 25 is not a smaller kilogram than a dumbbell, so a load is only ever plotted against
+   itself, over time, on one movement, and the series names the movement and its unit; do not add a
+   cross-movement "heaviest lift" chart or a volume figure. And **an empty series is a fact, sent
+   with its own labels and zeros**, never a missing entry: a graph she could only discover by
+   accident is worse than a menu with an empty row in it. A read that fails is `read_failed`, never
+   a menu of empty series. Bounds are the bucket **count** (`Integer.floor_div/2` plus an index
+   range), not the last bucket's start date — the date comparison dropped a set kept today
+   (2026-10-16).
 
 ---
 
