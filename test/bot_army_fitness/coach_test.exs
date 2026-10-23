@@ -207,6 +207,33 @@ defmodule BotArmyFitness.CoachTest do
       assert press["max"] == 12
     end
 
+    test "a bodyweight movement travels with its own counts and how the next rep is earned" do
+      # The request this fixes, 2026-10-23: "1 pull up is what I can do now ... and the
+      # coach should provide tips on how I can get more pull ups". Both facts travel on
+      # the same movement line, so the card needs nothing but the wire.
+      movement =
+        Coach.sessions()
+        |> Enum.map(&Coach.plan(&1, %{}))
+        |> Enum.flat_map(& &1["slots"])
+        |> Enum.flat_map(& &1["movements"])
+        |> Enum.find(&(&1["value"] == "pull_up"))
+
+      assert movement["min"] == 1
+      assert movement["counts"] == [1, 2, 3, 5, 8, 10]
+      assert movement["tip"] =~ "negative"
+
+      # A movement the house has no advice for says nothing rather than borrowing one.
+      squat =
+        Coach.sessions()
+        |> Enum.map(&Coach.plan(&1, %{}))
+        |> Enum.flat_map(& &1["slots"])
+        |> Enum.flat_map(& &1["movements"])
+        |> Enum.find(&(&1["value"] == "goblet_squat"))
+
+      assert squat["tip"] == nil
+      assert squat["counts"] == [5, 8, 10, 12, 20]
+    end
+
     test "the number beside a movement is her own next set, from Progression", %{session: session} do
       history = %{"cable_chest_press" => [set("cable_chest_press", "2026-10-13", 8, 10)]}
       slot = Coach.plan(session, history)["slots"] |> List.first()

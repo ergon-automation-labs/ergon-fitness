@@ -33,6 +33,22 @@ defmodule BotArmyFitness.ExerciseCatalog do
   of adding a "reasonable" kilogram — `BotArmyFitness.Progression`'s job, not this
   module's.
 
+  ## A movement's own counts, where the house list starts above her
+
+  `rep_choices/0` is the house's list of counts — the numbers she gave for the loaded
+  movements, 5, 8, 10, 12, 20. It is not every movement's list. A bodyweight movement's
+  count starts wherever the body is, and the house list starts at five: a pull-up menu
+  built from it offered only numbers she cannot press ("1 is what I can do now"), and a
+  rule that read *next: 5* off a logged 1 would be coaching a jump of four reps nobody
+  makes. So a movement may carry its own `"counts"`, and then those are what a press may
+  name for it and what `BotArmyFitness.Progression` walks — one more rep at a time at the
+  bottom of a bodyweight movement, because that is the rung a body has. See
+  `counts_for/1`.
+
+  A movement may also carry a `"tip"`: one true sentence about how to get the next rep,
+  in the bot's words rather than a surface's. It is absent for most movements, and absent
+  means the house has nothing to say — not that there is nothing to do.
+
   ## What a movement works, in one vocabulary
 
   Every movement carries a `"muscles"` map naming what it works, drawn from a fixed list
@@ -74,6 +90,9 @@ defmodule BotArmyFitness.ExerciseCatalog do
   @measures ["reps", "seconds"]
 
   # Her counts, not a ladder: 5, 8, 10, 12, 20. A step would have to invent the gaps.
+  # This is the house list every movement without its own `"counts"` travels with; a
+  # movement whose floor sits under 5 carries its own, because a press that cannot name
+  # what she can do is a menu that says she did nothing.
   @rep_choices [5, 8, 10, 12, 20]
 
   # Float ladders (24.5 kg kettlebell settings) and step arithmetic both need slack.
@@ -661,8 +680,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "equipment" => "pull_up_bar",
       "activity" => "strength",
       "measure" => "reps",
-      "min" => 5,
+      "min" => 1,
       "max" => 10,
+      "counts" => [1, 2, 3, 5, 8, 10],
+      "tip" =>
+        "One is a rep. The second comes from slow negatives — get your chin over the bar and lower for three seconds — plus scapular pulls and rows; all three are on this card.",
       "muscles" => %{
         "main" => ["lats", "upper_back"],
         "also" => ["biceps", "forearms", "abs"]
@@ -674,8 +696,11 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "equipment" => "pull_up_bar",
       "activity" => "strength",
       "measure" => "reps",
-      "min" => 5,
+      "min" => 1,
       "max" => 10,
+      "counts" => [1, 2, 3, 5, 8, 10],
+      "tip" =>
+        "One is a rep. Palms toward you makes it the closest thing to a pull-up: slow negatives, scapular pulls, and the lat pulldown are how the second one arrives.",
       "muscles" => %{"main" => ["biceps", "lats"], "also" => ["upper_back", "forearms"]}
     },
     %{
@@ -686,6 +711,9 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "measure" => "reps",
       "min" => 3,
       "max" => 6,
+      "counts" => [3, 4, 5, 6],
+      "tip" =>
+        "Step or jump up so your chin clears the bar, then lower yourself as slowly as you can. Three slow ones is a set, and this is the movement that makes the next real one.",
       "muscles" => %{"main" => ["lats", "upper_back"], "also" => ["biceps", "forearms"]}
     },
     %{
@@ -696,6 +724,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "measure" => "reps",
       "min" => 8,
       "max" => 12,
+      "tip" =>
+        "Hang with straight arms, then pull your shoulder blades down and back without bending the elbows — the first inch of every pull-up, and worth owning on its own.",
       "muscles" => %{"main" => ["lats"], "also" => ["upper_back", "traps", "forearms"]}
     },
     %{
@@ -726,6 +756,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "measure" => "seconds",
       "min" => 20,
       "max" => 60,
+      "tip" =>
+        "Hang from the bar with straight arms for as long as you can hold on. Grip is half of a pull-up and this is how it is built.",
       "muscles" => %{"main" => ["forearms"], "also" => ["lats", "upper_back"]}
     }
   ]
@@ -877,6 +909,8 @@ defmodule BotArmyFitness.ExerciseCatalog do
         "measure" => exercise["measure"],
         "min" => exercise["min"],
         "max" => exercise["max"],
+        "counts" => counts_for(exercise),
+        "tip" => exercise["tip"],
         "muscles" => exercise["muscles"]
       }
     end)
@@ -1005,6 +1039,33 @@ defmodule BotArmyFitness.ExerciseCatalog do
   """
   @spec rep_choices() :: [pos_integer()]
   def rep_choices, do: @rep_choices
+
+  @doc """
+  The counts a press may name for **one movement**, in press order.
+
+  This is `rep_choices/0` unless the movement carries its own `"counts"`. A movement
+  whose window starts under the house's smallest count has to: a pull-up menu built
+  from `[5, 8, 10, 12, 20]` offers nothing to a person who can do one, and the only set
+  she could then keep is a number she did not do. Its own list is the same rule the
+  equipment ladders follow — a count travels with the movement it counts.
+
+  `nil` for a name this gym does not have, the same whole-or-nothing rule as
+  `target/1`. A movement that carries a malformed list falls back to the house list
+  rather than to a menu with no numbers on it.
+  """
+  @spec counts_for(term()) :: [pos_integer()] | nil
+  def counts_for(value) when is_binary(value), do: counts_for(exercise(value))
+
+  def counts_for(%{"counts" => counts}) when is_list(counts) do
+    if counts != [] and Enum.all?(counts, &(is_integer(&1) and &1 > 0)) do
+      counts
+    else
+      @rep_choices
+    end
+  end
+
+  def counts_for(%{}), do: @rep_choices
+  def counts_for(_other), do: nil
 
   @doc "What a movement's range can count. The values `measure` may take."
   @spec measures() :: [String.t()]

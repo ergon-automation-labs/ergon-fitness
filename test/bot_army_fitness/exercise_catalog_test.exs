@@ -350,7 +350,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
     test "an exercise option carries everything a picker sends with it" do
       for option <- ExerciseCatalog.exercise_options() do
         assert Map.keys(option) |> Enum.sort() ==
-                 ~w(activity equipment label max measure min muscles value)
+                 ~w(activity counts equipment label max measure min muscles tip value)
       end
     end
 
@@ -460,6 +460,68 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       assert schema["properties"]["data"]["properties"]["exercises"]["items"]["properties"][
                "measure"
              ]["enum"] == ExerciseCatalog.measures()
+    end
+
+    test "a movement whose floor is under the house list carries its own counts" do
+      assert ExerciseCatalog.counts_for("pull_up") == [1, 2, 3, 5, 8, 10]
+      assert ExerciseCatalog.counts_for("chin_up") == [1, 2, 3, 5, 8, 10]
+      assert ExerciseCatalog.counts_for("negative_pull_up") == [3, 4, 5, 6]
+
+      # Its own floor is a count it offers, and nothing it offers is outside its window:
+      # the list is the menu, so a count the range would not walk is not on it.
+      for value <- ["pull_up", "chin_up", "negative_pull_up"] do
+        movement = ExerciseCatalog.exercise(value)
+        counts = ExerciseCatalog.counts_for(value)
+
+        assert hd(counts) == movement["min"]
+        assert List.last(counts) <= movement["max"]
+      end
+    end
+
+    test "every other movement travels with the house list, and a stranger with nothing" do
+      assert ExerciseCatalog.counts_for("goblet_squat") == [5, 8, 10, 12, 20]
+      assert ExerciseCatalog.counts_for("kb_swing") == ExerciseCatalog.rep_choices()
+      assert ExerciseCatalog.counts_for("not_a_movement") == nil
+    end
+
+    test "the count she can actually do is on the menu that counts it" do
+      # The bug this fixes: pull_up's floor was 5, so "1 is what I can do now" was not a
+      # number this gym could record — the only sets the card offered were ones she did
+      # not do.
+      assert ExerciseCatalog.exercise("pull_up")["min"] == 1
+      assert 1 in ExerciseCatalog.counts_for("pull_up")
+      assert 1 in ExerciseCatalog.counts_for("chin_up")
+    end
+
+    test "the counts travel on the options reply, one list per movement" do
+      reply = WorkoutHandler.handle_options() |> Jason.decode!()
+      exercises = reply["data"]["exercises"]
+
+      assert Enum.find(exercises, &(&1["value"] == "pull_up"))["counts"] == [1, 2, 3, 5, 8, 10]
+
+      assert Enum.find(exercises, &(&1["value"] == "goblet_squat"))["counts"] ==
+               [5, 8, 10, 12, 20]
+    end
+
+    test "a movement that knows how the next rep is earned says so, and the rest stay silent" do
+      for value <- ["pull_up", "chin_up", "negative_pull_up", "scapular_pull_up", "dead_hang"] do
+        tip = ExerciseCatalog.exercise(value)["tip"]
+        assert is_binary(tip) and tip != "", "#{value} has no tip"
+      end
+
+      assert ExerciseCatalog.exercise("pull_up")["tip"] =~ "negative"
+      # Absent is the house having nothing to say, not a gap to fill with a slogan.
+      assert ExerciseCatalog.exercise("goblet_squat")["tip"] == nil
+    end
+
+    test "the reply schema describes the movement's own counts and its tip" do
+      properties =
+        read_schema("fitness.workout.options.reply.json")["properties"]["data"]["properties"][
+          "exercises"
+        ]["items"]["properties"]
+
+      assert properties["counts"]["items"]["type"] == "integer"
+      assert properties["tip"]["type"] == ["string", "null"]
     end
   end
 

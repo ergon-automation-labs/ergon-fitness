@@ -21,10 +21,20 @@ defmodule BotArmyFitness.ProgressionTest do
     end
 
     test "a count below the whole window climbs to its bottom, not past it" do
-      # A negative pull-up is 3-to-6 on the bar, and the coarsest window this gym walks is
-      # 5, 8, 10, 12, 20 — so the only step inside 3..6 is 5.
-      assert %{"amount" => 5, "load_value" => nil} =
-               Progression.next_load([set("negative_pull_up", 3)])
+      # A scapular pull-up is 8-to-12 on the bar and its counts are the house's own 8, 10,
+      # 12 — so a logged 3 climbs to the window's bottom rather than to a number past it.
+      assert %{"amount" => 8, "load_value" => nil} =
+               Progression.next_load([set("scapular_pull_up", 3, nil, "bodyweight")])
+    end
+
+    test "a pull-up counts in ones from where she is, not from the house's 5" do
+      # Measured request, 2026-10-23: "1 pull up is what I can do now". The house list
+      # starts at 5, so a logged 1 answered "next: 5" — four more reps than anybody makes
+      # in one jump on a bar. The movement's own counts make the next rung one more rep.
+      assert %{"amount" => 2, "load_value" => nil, "load_kind" => "bodyweight"} =
+               Progression.next_load([set("pull_up", 1, nil, "bodyweight")])
+
+      assert %{"amount" => 3} = Progression.next_load([set("pull_up", 2, nil, "bodyweight")])
     end
 
     test "a bodyweight movement carries no number, and only its count moves" do

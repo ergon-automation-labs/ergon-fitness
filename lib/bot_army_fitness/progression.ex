@@ -95,14 +95,18 @@ defmodule BotArmyFitness.Progression do
     end
   end
 
-  # The window, in the order the count should walk it: the movement's own rep choices
-  # that fall inside its range. A range with no choice inside it — a window narrower than
-  # the coarsest step between choices — cannot be walked, so the rule stays silent.
+  # The window, in the order the count should walk it: the counts this movement lets her
+  # press, that fall inside its range. A movement with its own counts walks those — a
+  # pull-up logged at 1 answers "2", not the house list's "5" — and one without them
+  # walks the house list. A range with no count inside it — a window narrower than the
+  # coarsest step between counts — cannot be walked, so the rule stays silent.
   defp window(movement) do
     min = movement["min"]
     max = movement["max"]
 
-    Enum.filter(ExerciseCatalog.rep_choices(), &(&1 >= min and &1 <= max))
+    ExerciseCatalog.counts_for(movement)
+    |> List.wrap()
+    |> Enum.filter(&(&1 >= min and &1 <= max))
   end
 
   defp walk(_movement, [], _amount, _set), do: nil

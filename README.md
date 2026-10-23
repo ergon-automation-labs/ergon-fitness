@@ -80,6 +80,31 @@ day from the workout log **and** the set log, and a failed read is an error, nev
 a shorter history. Both logs are read newest-day-first, so a set she backfills for
 an older day does not become "last time" — and does not make today look trained.
 
+### A movement's own counts, where the house list starts above her
+
+Measured 2026-10-23, in her words: *"1 pull up is what I can do now."* The house
+list of counts is `[5, 8, 10, 12, 20]`, so the press that keeps a pull-up offered
+exactly five numbers she cannot do, and the only set she could have kept was a set
+she did not do. A rep is a count **of the movement**, the same way a load is a
+number **of the piece**, so a movement whose floor sits under the house's smallest
+carries its own `"counts"`: `pull_up` and `chin_up` walk `[1, 2, 3, 5, 8, 10]`,
+`negative_pull_up` `[3, 4, 5, 6]`. Every other movement travels with the house list,
+and a movement with no counts of its own is not a special case anywhere: the rule is
+one line in `counts_for/1`, and an unknown movement still answers `nil`.
+
+`Progression.window/1` reads those counts rather than the global list, so a logged
+1 answers **next: 2** — the house's 5 would be three reps of nothing she has done.
+
+The same measurement asked for the other half: *"and the coach should provide tips
+on how I can get more pull ups."* So a movement may also carry one sentence, `"tip"`,
+naming how the next rep is earned in the movements this gym actually has (`pull_up`:
+slow negatives, scapular pulls, rows — all three are on the card). It is sparse on
+purpose, absent for most of the fifty-two movements, and **absent means the house
+has nothing to say**, not "there is nothing to do." Both fields travel on
+`fitness.workout.options` and on each movement line of `fitness.coach.today`, so a
+surface draws what the bot sent and a bot older than the field still answers with
+the house list.
+
 ## What a movement works, and the coach
 
 A movement is not a muscle either. `ExerciseCatalog` carries a **fixed vocabulary of

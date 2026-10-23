@@ -378,6 +378,8 @@ defmodule BotArmyFitness.Coach do
       "measure" => target["measure"],
       "min" => target["min"],
       "max" => target["max"],
+      "counts" => ExerciseCatalog.counts_for(value),
+      "tip" => exercise["tip"],
       "last" => last_date(sets),
       "next" => Progression.next_load(sets)
     }
