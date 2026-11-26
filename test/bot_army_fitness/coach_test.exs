@@ -407,6 +407,49 @@ defmodule BotArmyFitness.CoachTest do
       assert slot["movements"] |> Enum.map(& &1["value"]) == ["lat_pulldown"]
     end
 
+    test "every picked movement carries the set a press would file, so the card states its fact" do
+      session = Coach.owed_on(Coach.rotation_anchor())
+      plan = Coach.plan(session, %{})
+
+      for slot <- plan["slots"], movement <- slot["movements"], movement["value"] == slot["pick"] do
+        reach = movement["reach"]
+
+        assert is_map(reach), "the picked movement has no reach: #{movement["value"]}"
+        assert reach["exercise"] == movement["value"]
+        assert is_integer(reach["amount"]) and reach["amount"] > 0
+        assert reach["measure"] in ~w(reps seconds)
+      end
+    end
+
+    test "a movement she has never logged reaches for the bottom of its own range, unloaded" do
+      session = Coach.owed_on(Coach.rotation_anchor())
+
+      reached =
+        Coach.plan(session, %{})["slots"]
+        |> Enum.flat_map(& &1["movements"])
+        |> Enum.find(&(&1["value"] == "kb_swing"))
+
+      assert reached["reach"]["amount"] == reached["min"]
+      assert reached["reach"]["load_value"] == nil
+    end
+
+    test "a movement she has topped reaches for her own last set again, not an invented rung" do
+      # The clutch's top rung is 25 and her last set was 25 x 12, the top of the window:
+      # `Progression` answers "top", and the card's press must still name a real set.
+      history = %{
+        "cable_chest_press" => [set("cable_chest_press", "2026-10-20", 12, 25)]
+      }
+
+      press =
+        Coach.plan(Coach.owed_on(Coach.rotation_anchor()), history)["slots"]
+        |> Enum.flat_map(& &1["movements"])
+        |> Enum.find(&(&1["value"] == "cable_chest_press"))
+
+      assert press["next"] == "top"
+      assert press["reach"]["amount"] == 12
+      assert press["reach"]["load_value"] == 25.0
+    end
+
     test "the movement list is never shortened by the room" do
       # Ordering, not availability: the wall movements stay on the wire with what they
       # cost beside them, because a plan that deleted them would be hiding the gym.

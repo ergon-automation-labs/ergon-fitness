@@ -438,9 +438,40 @@ defmodule BotArmyFitness.Coach do
       "tip" => exercise["tip"],
       "last" => last_date(sets),
       "next" => Progression.next_load(sets),
+      "reach" => reach(value, sets, target),
       "ready" => Gear.ready?(value, gear),
       "needs" => Gear.words(Gear.needs(value))
     }
+  end
+
+  # The set a card's one press would file — the plan's own next number, in the shape a
+  # write takes. `"next"` already answers the rung to climb to; this answers it in all
+  # three cases a card has to draw, because a row that cannot say what it will file is a
+  # row with a door painted on it:
+  #
+  #   * nothing logged yet — the bottom of the movement's own range, with no load (she has
+  #     not put a number on it, and inventing one would be the surface's guess, not hers)
+  #   * a number to climb to — `Progression`'s answer, unchanged
+  #   * `"top"` (no rung above her) or silence (a hold, or a set that does not say where on
+  #     the ladder it was) — her own last set again, which is exactly what "no rung above"
+  #     means to do
+  defp reach(value, [], target) do
+    exercise = ExerciseCatalog.exercise(value) || %{}
+
+    %{
+      "exercise" => value,
+      "measure" => target["measure"],
+      "amount" => target["min"],
+      "load_kind" => ExerciseCatalog.load_kind(exercise["equipment"]),
+      "load_value" => nil
+    }
+  end
+
+  defp reach(_value, [set | _rest], _target) do
+    case Progression.next_load([set]) do
+      %{} = next -> next
+      _top_or_silent -> set
+    end
   end
 
   defp last_date([set | _rest]) when is_map(set) do
