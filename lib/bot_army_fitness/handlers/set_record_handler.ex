@@ -97,7 +97,7 @@ defmodule BotArmyFitness.Handlers.SetRecordHandler do
             history = history(tenant_id, exercise["value"])
 
             Reply.ok(%{
-              "set" => set,
+              "set" => Map.put(set, "label", ExerciseCatalog.label(exercise["value"])),
               "previous" => previous_set(history, set),
               "next" => Progression.next_load(history)
             })

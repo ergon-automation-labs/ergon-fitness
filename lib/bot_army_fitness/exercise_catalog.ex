@@ -926,6 +926,20 @@ defmodule BotArmyFitness.ExerciseCatalog do
   @spec exercise(term()) :: map() | nil
   def exercise(value), do: Enum.find(@exercises, &(&1["value"] == value))
 
+  @doc """
+  The movement's own name, for anything that has to say what a set was.
+
+  A reply that says `"kb_clean_press"` and leaves the reader to title-case it is a reply
+  that turns her kettlebell clean press into "Kb clean press" — the catalog is the one place
+  that knows what the gym calls its movements, so the words travel with the fact.
+  """
+  def label(value) do
+    case exercise(value) do
+      %{"label" => label} when is_binary(label) -> label
+      _unknown -> to_string(value)
+    end
+  end
+
   @doc "Whether a value names a movement in this gym's menu."
   @spec known?(term()) :: boolean()
   def known?(value), do: exercise(value) != nil

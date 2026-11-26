@@ -28,7 +28,7 @@ defmodule BotArmyFitness.Handlers.SetDeleteHandler do
 
   require Logger
 
-  alias BotArmyFitness.WorkoutSetStore
+  alias BotArmyFitness.{ExerciseCatalog, WorkoutSetStore}
   alias BotArmyLibraryCore.Tenant
   alias BotArmyLibraryRuntime.NATS.Reply
 
@@ -60,7 +60,7 @@ defmodule BotArmyFitness.Handlers.SetDeleteHandler do
       {:ok, set} ->
         Logger.info("Took back set #{id}: #{inspect(set["exercise"])}")
 
-        Reply.ok(%{"set" => set})
+        Reply.ok(%{"set" => Map.put(set, "label", ExerciseCatalog.label(set["exercise"]))})
 
       {:error, :not_found} ->
         Reply.error("that set is not in your log", :not_found)

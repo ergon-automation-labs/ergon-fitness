@@ -120,6 +120,18 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       assert Enum.all?(values, &(&1 == String.downcase(&1)))
     end
 
+    test "every movement can be named, because a reply that says a slug is not a sentence" do
+      for exercise <- ExerciseCatalog.exercises() do
+        label = ExerciseCatalog.label(exercise["value"])
+
+        assert is_binary(label) and label != ""
+        assert label != exercise["value"], "#{exercise["value"]} has no name of its own"
+      end
+
+      # An unknown movement is named as it was given, not guessed at.
+      assert ExerciseCatalog.label("nonsense") == "nonsense"
+    end
+
     test "every movement belongs to a piece of equipment in the gym" do
       for exercise <- ExerciseCatalog.exercises() do
         assert ExerciseCatalog.equipment_value?(exercise["equipment"]),
