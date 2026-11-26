@@ -10,5 +10,6 @@ defmodule BotArmyFitness.WorkoutSetStoreBehaviour do
   @callback distinct_days(binary) :: {:ok, [Date.t()]}
   @callback since(binary, Date.t()) :: {:ok, [map]}
   @callback recent_day(binary) :: {:ok, map | nil}
+  @callback delete(binary, binary) :: {:ok, map} | {:error, atom}
   @callback clear :: :ok
 end

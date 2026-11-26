@@ -28,7 +28,84 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandlerTest do
       {:ok, %{}}
     end)
 
+    # The room's state is its own store. Every test here starts on a floor day — the
+    # catalog's default — and the tests that care about the wall override this stub.
+    stub(BotArmyFitness.GearSetupStoreMock, :get, fn _tenant -> {:ok, "floor"} end)
+
     :ok
+  end
+
+  describe "the room the plan is built for" do
+    test "a stored wall day travels as gear, and every slot leads with a wall movement when she has one" do
+      # The read that makes the wall a fact instead of a default: the same log, the same
+      # day, and the room changed by one stored row. Her own cable movements are what she
+      # did last, so on a wall day they lead; on a floor day the floor-safe ones do. This is
+      # the difference the plan exists to show, and it is decided by the store's answer.
+      stub(BotArmyFitness.GearSetupStoreMock, :get, fn @tenant -> {:ok, "wall"} end)
+
+      stub(BotArmyFitness.WorkoutSetStoreMock, :newest_per_exercise, fn _tenant, _ex ->
+        {:ok,
+         %{
+           "cable_shoulder_press" => [set("cable_shoulder_press", "2026-10-13", 12, 8)],
+           "cable_lateral_raise" => [set("cable_lateral_raise", "2026-10-13", 12, 5)]
+         }}
+      end)
+
+      session = decode(CoachTodayHandler.handle_today(request()))["data"]["session"]
+
+      assert session["gear"]["maxpro"] == "wall"
+
+      # A wall day can do a wall movement, so the slot she last did it in leads with it.
+      overhead =
+        session["slots"] |> Enum.find(&(&1["slot"] == "shoulders overhead"))
+
+      assert overhead["pick"] == "cable_shoulder_press"
+      assert overhead["needs"] == []
+    end
+
+    test "the same stored floor day leads with the floor-safe movement instead" do
+      stub(BotArmyFitness.WorkoutSetStoreMock, :newest_per_exercise, fn _tenant, _ex ->
+        {:ok, %{"cable_shoulder_press" => [set("cable_shoulder_press", "2026-10-13", 12, 8)]}}
+      end)
+
+      session = decode(CoachTodayHandler.handle_today(request()))["data"]["session"]
+
+      assert session["gear"]["maxpro"] == "floor"
+
+      overhead =
+        session["slots"] |> Enum.find(&(&1["slot"] == "shoulders overhead"))
+
+      assert overhead["pick"] != "cable_shoulder_press"
+
+      # The wall movement stays on the wire with what it costs, rather than vanishing: on a
+      # floor day the slot can still be done (the standing press is ready), so the slot owes
+      # no explanation — the movement's own line carries the price and the fact it is not
+      # ready.
+      wall =
+        overhead["movements"] |> Enum.find(&(&1["value"] == "cable_shoulder_press"))
+
+      refute wall["ready"]
+      assert wall["needs"] == "the wall attachment"
+      assert overhead["needs"] == []
+    end
+
+    test "a gear read that fails is a refusal, not a floor day" do
+      stub(BotArmyFitness.GearSetupStoreMock, :get, fn _tenant ->
+        raise "could not lookup Ecto repo"
+      end)
+
+      reply = decode(CoachTodayHandler.handle_today(request()))
+
+      assert reply["ok"] == false
+      assert reply["code"] == "read_failed"
+      refute reply["data"]["session"]
+    end
+
+    test "a gear read that answers a word the room cannot be is a refusal too" do
+      stub(BotArmyFitness.GearSetupStoreMock, :get, fn _tenant -> {:ok, "basement"} end)
+
+      assert decode(CoachTodayHandler.handle_today(request()))["code"] == "read_failed"
+    end
   end
 
   describe "handle_today/1" do

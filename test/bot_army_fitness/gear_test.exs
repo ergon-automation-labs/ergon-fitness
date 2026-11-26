@@ -125,4 +125,37 @@ defmodule BotArmyFitness.GearTest do
       assert Gear.words(nil) == nil
     end
   end
+
+  describe "the room as stored" do
+    test "a stored wall day is a wall day, and its movements become ready" do
+      state = Gear.state(%{}, "wall")
+
+      assert state["maxpro"] == "wall"
+      assert Gear.ready?("cable_shoulder_press", state)
+      assert Gear.ready?("cable_chest_press", state)
+    end
+
+    test "the bell's setting still travels on a stored day" do
+      history = %{
+        "kb_swing" => [
+          %{"exercise" => "kb_swing", "load_value" => 24.5, "date" => "2026-10-13"}
+        ]
+      }
+
+      assert Gear.state(history, "wall")["bell"] == 24.5
+      assert Gear.state(history)["bell"] == 24.5
+    end
+
+    test "a position this module does not know is read as the floor, which is what the store refuses to write" do
+      # Defence in depth, and deliberately not a second validation door: the store is what
+      # refuses an unknown word. A caller that hands this function one anyway gets the
+      # catalog's default rather than a state no movement can be ready in.
+      assert Gear.state(%{}, "basement")["maxpro"] == "floor"
+      assert Gear.state(%{}, nil)["maxpro"] == "floor"
+    end
+
+    test "a history that is not a map still answers a room" do
+      assert Gear.state(:not_a_history, "wall") == %{"maxpro" => "floor", "bell" => nil}
+    end
+  end
 end

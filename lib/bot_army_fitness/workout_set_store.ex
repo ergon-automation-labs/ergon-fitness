@@ -91,6 +91,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
   def recent(tenant_id, limit \\ @default_limit) when is_binary(tenant_id) do
     {:ok,
      WorkoutSet
+     |> live()
      |> where([s], s.tenant_id == ^tenant_id)
      |> order_by([s], desc: s.date, desc: s.inserted_at)
      |> limit(^normalise_limit(limit))
@@ -122,6 +123,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
       when is_binary(tenant_id) and is_binary(exercise) do
     {:ok,
      WorkoutSet
+     |> live()
      |> where([s], s.tenant_id == ^tenant_id and s.exercise == ^exercise)
      |> order_by([s], desc: s.date, desc: s.inserted_at)
      |> limit(^normalise_limit(limit))
@@ -146,6 +148,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
       when is_binary(tenant_id) and is_list(exercises) do
     {:ok,
      WorkoutSet
+     |> live()
      |> where([s], s.tenant_id == ^tenant_id and s.exercise in ^exercises)
      |> order_by([s], asc: s.exercise, desc: s.date, desc: s.inserted_at)
      |> distinct([s], s.exercise)
@@ -166,6 +169,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
   def distinct_days(tenant_id) when is_binary(tenant_id) do
     {:ok,
      WorkoutSet
+     |> live()
      |> where([s], s.tenant_id == ^tenant_id)
      |> distinct([s], s.date)
      |> select([s], s.date)
@@ -196,6 +200,46 @@ defmodule BotArmyFitness.WorkoutSetStore do
   end
 
   @doc """
+  Take a set back: `fitness.set.delete`.
+
+  A soft delete, because the press that recorded it was one press with no confirmation
+  step and a thumb can land on the wrong row. The row is kept and marked, so every read
+  filters it out and the movement's progression returns to where it was before the press
+  — "last time" and "next" are rebuilt from live rows, never patched.
+
+  Answers `{:ok, set}` with the row as it now stands, `{:ok, set}` again for a set that is
+  already deleted (an undo pressed twice is still undone, not an error), and
+  `{:error, :not_found}` for an id that is not this tenant's — an id from another house is
+  indistinguishable from an id that never existed, which is the point.
+  """
+  @impl true
+  def delete(tenant_id, set_id)
+      when is_binary(tenant_id) and is_binary(set_id) do
+    case Repo.get_by(WorkoutSet, id: set_id, tenant_id: tenant_id) do
+      nil ->
+        {:error, :not_found}
+
+      %WorkoutSet{deleted_at: %DateTime{}} = already_deleted ->
+        {:ok, schema_to_map(already_deleted)}
+
+      %WorkoutSet{} = set ->
+        case set
+             |> Ecto.Changeset.change(deleted_at: now())
+             |> Repo.update() do
+          {:ok, updated} ->
+            Logger.info("Took back set #{set_id} (#{set.exercise})")
+            {:ok, schema_to_map(updated)}
+
+          {:error, changeset} ->
+            Logger.error("Failed to take back set: #{inspect(changeset.errors)}")
+            {:error, :database_error}
+        end
+    end
+  end
+
+  def delete(_tenant_id, _set_id), do: {:error, :not_found}
+
+  @doc """
   Delete every set.
 
   Answers `:ok` and deletes the rows. Nothing in the bot calls it; it exists for
@@ -210,10 +254,19 @@ defmodule BotArmyFitness.WorkoutSetStore do
 
   # Private functions
 
+  # Every read asks for live rows only. A taken-back set must not be visible to a
+  # progression read, a day count, or the bell's own newest-set rule — a single missed
+  # filter would make an undo half true, and the half that stayed behind would be a number
+  # she never lifted.
+  defp live(query), do: where(query, [s], is_nil(s.deleted_at))
+
+  defp now, do: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
   # The newest day, by the same date-first ordering every row read uses. `nil` when the
   # tenant has no sets at all, which the caller turns into a fact rather than an error.
   defp latest_date(tenant_id) do
     WorkoutSet
+    |> live()
     |> where([s], s.tenant_id == ^tenant_id)
     |> order_by([s], desc: s.date, desc: s.inserted_at)
     |> limit(1)
@@ -225,6 +278,7 @@ defmodule BotArmyFitness.WorkoutSetStore do
   # day is already known, so the only ordering left is which set she wrote down last.
   defp sets_on(tenant_id, date) do
     WorkoutSet
+    |> live()
     |> where([s], s.tenant_id == ^tenant_id and s.date == ^date)
     |> order_by([s], desc: s.inserted_at)
     |> Repo.all()
@@ -259,8 +313,13 @@ defmodule BotArmyFitness.WorkoutSetStore do
       "load_kind" => set.load_kind,
       "load_value" => set.load_value,
       "date" => set.date |> to_string(),
+      "deleted_at" => deleted_at(set.deleted_at),
       "created_at" => set.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
       "updated_at" => set.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
+
+  defp deleted_at(nil), do: nil
+
+  defp deleted_at(%DateTime{} = at), do: BotArmyLibraryRuntime.Timestamp.utc_iso8601(at)
 end

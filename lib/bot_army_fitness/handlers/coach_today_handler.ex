@@ -50,15 +50,17 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandler do
   costs rather than a row that vanished. `"gear"` travels with the plan, because a plan is
   a plan for a room.
 
-  The cable machine's state is the house's default — on the floor — until a write exists
-  to move it to the wall; the bell's setting is read from her own newest kettlebell set.
-  Both arrive in `"gear"`, so a card prints the room it is a plan for instead of assuming
-  it.
+  The cable machine's position is **stored** (`fitness.gear.setup` writes one row per
+  house; the card flips it with one press), and the bell's setting is read from her own
+  newest kettlebell set. Both arrive in `"gear"`, so a card prints the room it is a plan
+  for instead of assuming it. A gear read that fails answers `:read_failed` like every
+  other read here: an outage must not be drawn as "the cable is on the floor", because
+  that is a different session, not a missing one.
   """
 
   require Logger
 
-  alias BotArmyFitness.{Coach, HouseholdDay, Scheduler, WorkoutSetStore}
+  alias BotArmyFitness.{Coach, Gear, GearSetupStore, HouseholdDay, Scheduler, WorkoutSetStore}
   alias BotArmyLibraryCore.Tenant
   alias BotArmyLibraryRuntime.NATS.Reply
 
@@ -78,7 +80,8 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandler do
 
     with {:ok, days} when is_integer(days) and days >= 0 <- days_trained(),
          session when is_map(session) <- Coach.owed_on(date),
-         {:ok, history} <- history(tenant_id, session) do
+         {:ok, history} <- history(tenant_id, session),
+         {:ok, position} <- gear_position(tenant_id) do
       Reply.ok(%{
         "rotation" => %{
           "length" => Coach.session_count(),
@@ -86,7 +89,7 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandler do
           "days_trained" => days,
           "date" => Date.to_iso8601(date)
         },
-        "session" => Coach.plan(session, history)
+        "session" => Coach.plan(session, history, Gear.state(history, position))
       })
     else
       # A read of the log that came back as something other than a count is the same
@@ -133,5 +136,20 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandler do
 
   defp set_store do
     Application.get_env(:bot_army_fitness, :workout_set_store, WorkoutSetStore)
+  end
+
+  # The room's state comes from its own store, and a read that fails is a refusal: the
+  # session a caller would draw from a guessed position is a session for another room.
+  defp gear_position(tenant_id) do
+    case gear_store().get(tenant_id) do
+      {:ok, position} when position in ~w(floor wall) -> {:ok, position}
+      other -> {:error, {:unexpected_gear_reply, other}}
+    end
+  rescue
+    e -> {:error, e}
+  end
+
+  defp gear_store do
+    Application.get_env(:bot_army_fitness, :gear_setup_store, GearSetupStore)
   end
 end

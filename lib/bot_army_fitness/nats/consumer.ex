@@ -89,6 +89,16 @@ defmodule BotArmyFitness.NATS.Consumer do
       description: "List recorded home-gym sets, newest first"
     },
     %{
+      subject: "fitness.set.delete",
+      type: :request_reply,
+      description: "Take back one recorded set (soft delete; a press with a way back)"
+    },
+    %{
+      subject: "fitness.gear.setup",
+      type: :request_reply,
+      description: "Record where the cable machine stands: floor or wall"
+    },
+    %{
       subject: "fitness.graph.series",
       type: :request_reply,
       description: "Every graph this bot can draw from her log, with the points behind each one"
@@ -375,6 +385,18 @@ defmodule BotArmyFitness.NATS.Consumer do
         publish_reply(
           nats_msg.reply_to,
           BotArmyFitness.Handlers.SetListHandler.handle_list(message)
+        )
+
+      "fitness.set.delete" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.SetDeleteHandler.handle_delete(message)
+        )
+
+      "fitness.gear.setup" ->
+        publish_reply(
+          nats_msg.reply_to,
+          BotArmyFitness.Handlers.GearSetupHandler.handle_setup(message)
         )
 
       "fitness.graph.series" ->

@@ -33,12 +33,14 @@ defmodule BotArmyFitness.Gear do
   instead of asking her a question she has already answered by lifting it. The
   dumbbells need no such reading: every load from 10 to 55 kg is in the rack.
 
-  ## The wall is a fact about the room, and it is not stored here yet
+  ## The wall is a fact about the room, and it is one stored row
 
   `state/1` answers the house's default — the floor — because that is what the catalog
-  says the room usually looks like. When the wall state becomes something she can press
-  (`fitness.gear.setup`), it changes this function and nothing else; every caller already
-  takes the state as an argument it does not invent.
+  says the room usually looks like, and because a caller with no database (a test, a pure
+  rule) still deserves an answer. The real state comes from
+  `BotArmyFitness.GearSetupStore` through `state/2`, and a press on the card flips it
+  (`fitness.gear.setup`). Nothing else in this module changes when it is raised or put
+  back: every caller already takes the state as an argument it does not invent.
   """
 
   alias BotArmyFitness.ExerciseCatalog
@@ -74,13 +76,28 @@ defmodule BotArmyFitness.Gear do
   """
   @spec state() :: map()
   @spec state(map() | term()) :: map()
+  @spec state(map() | term(), term()) :: map()
   def state(history \\ %{})
 
-  def state(history) when is_map(history) do
-    %{"maxpro" => @floor, "bell" => bell_setting(history)}
+  def state(history) when is_map(history), do: state(history, @floor)
+
+  def state(_history), do: state(%{}, @floor)
+
+  @doc """
+  The room as it stands, given the cable machine's stored `position`.
+
+  A position this module does not know is read as the floor — the state the catalog says
+  the room is *usually* in — because `GearSetupStore` already refuses unknown words and a
+  caller that cannot say where the machine is has a failed read it should have refused
+  one step earlier. The history is still optional, for the same reason it is in `state/1`.
+  """
+  def state(history, position) when is_map(history) and position in @positions do
+    %{"maxpro" => position, "bell" => bell_setting(history)}
   end
 
-  def state(_history), do: %{"maxpro" => @floor, "bell" => nil}
+  def state(history, _position) when is_map(history), do: state(history, @floor)
+
+  def state(_history, _position), do: %{"maxpro" => @floor, "bell" => nil}
 
   @doc """
   What a movement asks of the room: `nil` when it works as the room usually stands, or

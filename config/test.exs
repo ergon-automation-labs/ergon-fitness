@@ -4,6 +4,7 @@ import Config
 config :bot_army_fitness, :workout_store, BotArmyFitness.WorkoutStoreMock
 config :bot_army_fitness, :goal_store, BotArmyFitness.GoalStoreMock
 config :bot_army_fitness, :workout_set_store, BotArmyFitness.WorkoutSetStoreMock
+config :bot_army_fitness, :gear_setup_store, BotArmyFitness.GearSetupStoreMock
 
 # Test against Kubernetes PostgreSQL (via NodePort)
 # Uses same configuration as production, just with test database

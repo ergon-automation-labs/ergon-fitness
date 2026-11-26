@@ -42,6 +42,7 @@ defmodule BotArmyFitness.Schemas.WorkoutSet do
     field(:load_kind, :string)
     field(:load_value, :float)
     field(:date, :date)
+    field(:deleted_at, :utc_datetime_usec)
     field(:tenant_id, Ecto.UUID)
     field(:user_id, Ecto.UUID)
 
