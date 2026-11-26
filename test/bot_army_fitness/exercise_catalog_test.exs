@@ -234,7 +234,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
       refute ExerciseCatalog.works?("cable_chest_press", "not_a_group")
 
       assert ExerciseCatalog.exercises_for_group("chest") |> Enum.map(& &1["value"]) ==
-               ~w(cable_chest_press cable_fly floor_press dip dip_hold_top dip_bar_push_up)
+               ~w(cable_chest_press cable_fly floor_press dip dip_hold_top dip_bar_push_up push_up)
     end
 
     test "the broad areas partition the groups, with none left out and none counted twice" do
@@ -285,8 +285,8 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
              }
     end
 
-    test "every movement value the vocabulary names exists, and the gym has fifty-two" do
-      assert length(ExerciseCatalog.exercises()) == 52
+    test "every movement value the vocabulary names exists, and the gym has fifty-five" do
+      assert length(ExerciseCatalog.exercises()) == 55
 
       counts =
         ExerciseCatalog.equipment()
@@ -297,8 +297,34 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
                "dumbbells" => 15,
                "kettlebell" => 7,
                "dip_bars" => 6,
-               "pull_up_bar" => 7
+               "pull_up_bar" => 7,
+               "floor" => 3
              }
+    end
+
+    test "the floor is a piece: three movements that ask the room for nothing" do
+      # A movement with no piece would be a movement no tab holds, because the picker groups
+      # by equipment. The floor is the piece every other piece stands on, and its movements
+      # are the ones that work when the cable is busy, the bell is loaded for something else
+      # and the bars are folded away.
+      assert ExerciseCatalog.by_equipment("floor") |> Enum.map(& &1["value"]) ==
+               ~w(plank push_up glute_bridge)
+
+      for movement <- ~w(plank push_up glute_bridge) do
+        assert ExerciseCatalog.load_kind("floor") == "bodyweight"
+        assert ExerciseCatalog.equipment_for(movement) == "floor"
+        assert ExerciseCatalog.target(movement)["min"] > 0
+      end
+    end
+
+    test "a plank is held, not counted" do
+      # The measure is the whole point: a hold counts seconds, and `Progression` must not read
+      # a plank as a ladder of planks. 20 seconds is the floor because a shorter hold teaches
+      # nobody the brace, and 60 is the top of the window rather than a target.
+      assert ExerciseCatalog.target("plank") == %{"measure" => "seconds", "min" => 20, "max" => 60}
+      assert ExerciseCatalog.muscles_for("plank")["main"] == ["abs"]
+      # No load: the floor takes no number, so a card must not offer one.
+      assert ExerciseCatalog.load_kind("floor") == "bodyweight"
     end
 
     test "every piece makes at least three movements possible" do
@@ -323,7 +349,7 @@ defmodule BotArmyFitness.ExerciseCatalogTest do
 
     test "the menu names the equipment that is actually here" do
       assert ExerciseCatalog.equipment() |> Enum.map(& &1["value"]) ==
-               ~w(maxpro dumbbells kettlebell dip_bars pull_up_bar)
+               ~w(maxpro dumbbells kettlebell dip_bars pull_up_bar floor)
 
       assert WorkoutTypes.values() |> Enum.member?("strength")
     end

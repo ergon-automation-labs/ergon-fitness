@@ -136,7 +136,13 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "settings" => [5.0, 11.5, 18.0, 24.5, 31.0, 37.5, 44.0]
     },
     %{"value" => "dip_bars", "label" => "Dip bars", "load" => @bodyweight},
-    %{"value" => "pull_up_bar", "label" => "Pull-up bar", "load" => @bodyweight}
+    %{"value" => "pull_up_bar", "label" => "Pull-up bar", "load" => @bodyweight},
+    # The piece that needs no setting up, and the one every other piece stands on. It is
+    # last because it is the fallback — when the cable is busy, the bell is too heavy and
+    # the bars are folded away, a press, a brace and a bridge still need nothing but the
+    # floor — and it is a piece at all rather than no piece because the picker groups by
+    # equipment: a movement with no piece would be a movement no tab holds.
+    %{"value" => "floor", "label" => "The floor", "load" => @bodyweight}
   ]
 
   # The muscle groups this gym can reach, in the order a person would read a body:
@@ -759,6 +765,55 @@ defmodule BotArmyFitness.ExerciseCatalog do
       "tip" =>
         "Hang from the bar with straight arms for as long as you can hold on. Grip is half of a pull-up and this is how it is built.",
       "muscles" => %{"main" => ["forearms"], "also" => ["lats", "upper_back"]}
+    },
+    # --- the floor -------------------------------------------------------------
+    # Three movements that ask the room for nothing. The plank is the house's brace: it
+    # counts **seconds**, not reps, because a hold is held — and a count that moved like a
+    # rep count would be `Progression` reading her plank as a ladder of planks.
+    %{
+      "value" => "plank",
+      "label" => "Plank",
+      "equipment" => "floor",
+      "activity" => "strength",
+      "measure" => "seconds",
+      "min" => 20,
+      "max" => 60,
+      "tip" =>
+        "Elbows under shoulders, ribs down, one straight line from heel to head. When the line breaks the hold is over — that is the whole rule, and it is why the seconds are hers.",
+      "muscles" => %{
+        "main" => ["abs"],
+        "also" => ["obliques", "lower_back", "front_delts"]
+      }
+    },
+    %{
+      "value" => "push_up",
+      "label" => "Push-up",
+      "equipment" => "floor",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 5,
+      "max" => 20,
+      "tip" =>
+        "Hands under the shoulders, body in one line, chest to the floor. On the toes or on the knees is the same movement at two settings, and the setting is yours.",
+      "muscles" => %{
+        "main" => ["chest"],
+        "also" => ["triceps", "front_delts", "abs"]
+      }
+    },
+    %{
+      "value" => "glute_bridge",
+      "label" => "Glute bridge",
+      "equipment" => "floor",
+      "activity" => "strength",
+      "measure" => "reps",
+      "min" => 8,
+      "max" => 20,
+      "tip" =>
+        "Heels close, drive the hips up until the body is one line, and hold the top for a breath. The hinge's answer when the bell is loaded for something else.",
+      "muscles" => %{
+        "main" => ["glutes"],
+        "also" => ["hamstrings", "lower_back", "abs"]
+      }
     }
   ]
 

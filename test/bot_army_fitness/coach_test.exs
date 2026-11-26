@@ -89,6 +89,45 @@ defmodule BotArmyFitness.CoachTest do
       assert length(Coach.covered_groups()) == 18
     end
 
+    test "the plank is the brace every middle slot opens on" do
+      # She asked for planks, and a slot's pick is what a card draws: her recent movement when
+      # she has one, the first thing the room can do when she has not. Putting the plank first
+      # is how the two sessions with a middle slot open on a brace until her own log says
+      # otherwise — and a plank needs nothing but the floor, so there is no room to wait for.
+      middles =
+        for session <- Coach.sessions(),
+            slot <- session["slots"],
+            slot["slot"] == "the middle",
+            do: {session, slot}
+
+      assert length(middles) == 2
+
+      for {session, slot} <- middles do
+        assert hd(slot["options"]) == "plank"
+
+        planned = Coach.plan(session, %{})
+        middle = Enum.find(planned["slots"], &(&1["slot"] == "the middle"))
+
+        assert middle["pick"] == "plank"
+        # The movements the slot held are still there: the plank leads, it does not replace.
+        assert Enum.any?(middle["movements"], &(&1["value"] == "plank"))
+        assert length(middle["movements"]) > 1
+      end
+    end
+
+    test "the floor's press is on the menu a press slot offers" do
+      # The push-up is the press that needs nothing: it is the answer when the cable is at the
+      # wall and the bars are folded away, and it is the bodyweight block an EMOM asks for.
+      presses =
+        for session <- Coach.sessions(),
+            slot <- session["slots"],
+            slot["slot"] == "a press",
+            do: slot
+
+      assert length(presses) == 2
+      for slot <- presses, do: assert("push_up" in slot["options"])
+    end
+
     test "the method is narrower than the menu, and says so" do
       # The menu has to be reachable; the method has to be short. The timed dip hold is the
       # one movement no session asks for: it is a hold, and the slots that want a chest press
@@ -98,7 +137,7 @@ defmodule BotArmyFitness.CoachTest do
       unused = Enum.map(ExerciseCatalog.exercises(), & &1["value"]) -- Coach.movements()
 
       assert unused == ["dip_hold_top"]
-      assert length(Coach.movements()) == 51
+      assert length(Coach.movements()) == 54
     end
   end
 

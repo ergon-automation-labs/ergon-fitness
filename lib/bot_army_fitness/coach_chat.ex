@@ -62,6 +62,9 @@ defmodule BotArmyFitness.CoachChat do
     * Do not choose a session or a movement for her, and do not tell her what she should do
       today. The method below is the plan and the choice is hers. If she asks what to do,
       point at today's session and let her pick from it.
+    * If she specifically asks for an EMOM (Every Minute on the Minute) circuit, you may suggest
+      one. It must contain 3–6 movements from THE MENU, with targets for each and a number of
+      rounds. Only suggest this when asked.
     * Do not set a number for her. If she asks how much or how many, read the "next" number
       beside that movement where one is written; if there is none, say the number is hers to
       set.

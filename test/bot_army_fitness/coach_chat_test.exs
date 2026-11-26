@@ -14,6 +14,15 @@ defmodule BotArmyFitness.CoachChatTest do
       assert prompt =~ "No streaks, no scores"
     end
 
+    test "allows EMOM suggestions only when asked" do
+      prompt = CoachChat.system_prompt()
+
+      assert prompt =~ "suggest"
+      assert prompt =~ "one"
+      assert prompt =~ "3–6 movements from THE MENU"
+      assert prompt =~ "Only suggest this when asked"
+    end
+
     test "the facts it may use are named as the only facts there are" do
       assert CoachChat.system_prompt() =~ "THE GYM, TODAY'S SESSION and HER LOG"
     end

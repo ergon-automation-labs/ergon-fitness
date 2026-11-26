@@ -77,7 +77,13 @@ defmodule BotArmyFitness.Coach do
           "slot" => "a press",
           "works" => ["chest", "front_delts", "triceps"],
           "sets" => @sets,
-          "options" => ["cable_chest_press", "floor_press", "dip", "dip_bar_push_up"]
+          "options" => [
+            "cable_chest_press",
+            "floor_press",
+            "dip",
+            "dip_bar_push_up",
+            "push_up"
+          ]
         },
         %{
           "slot" => "chest on its own",
@@ -107,7 +113,11 @@ defmodule BotArmyFitness.Coach do
           "slot" => "the middle",
           "works" => ["abs", "obliques"],
           "sets" => @sets,
-          "options" => ["cable_crunch", "cable_woodchop", "supported_knee_raise"]
+          # The plank leads. A slot's pick is her recent movement when she has one, and
+          # the first thing the room can do when she has not — so putting the brace first
+          # is how a session that used to open on a cable crunch opens on a minute of
+          # stillness instead, for anybody who has not told the log otherwise.
+          "options" => ["plank", "cable_crunch", "cable_woodchop", "supported_knee_raise"]
         }
       ]
     },
@@ -155,7 +165,13 @@ defmodule BotArmyFitness.Coach do
           "slot" => "the middle",
           "works" => ["abs", "hip_flexors"],
           "sets" => @sets,
-          "options" => ["hanging_knee_raise", "hanging_leg_raise", "l_sit", "kb_turkish_get_up"]
+          "options" => [
+            "plank",
+            "hanging_knee_raise",
+            "hanging_leg_raise",
+            "l_sit",
+            "kb_turkish_get_up"
+          ]
         }
       ]
     },
@@ -173,7 +189,7 @@ defmodule BotArmyFitness.Coach do
           "slot" => "a press",
           "works" => ["chest", "triceps"],
           "sets" => @sets,
-          "options" => ["floor_press", "dip", "dip_bar_push_up", "cable_chest_press"]
+          "options" => ["floor_press", "dip", "dip_bar_push_up", "cable_chest_press", "push_up"]
         },
         %{
           "slot" => "chest on its own",
@@ -244,7 +260,8 @@ defmodule BotArmyFitness.Coach do
             "cable_pull_through",
             "kb_swing",
             "cable_glute_kickback",
-            "calf_raise"
+            "calf_raise",
+            "glute_bridge"
           ]
         }
       ]
