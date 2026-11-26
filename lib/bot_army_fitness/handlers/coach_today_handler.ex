@@ -40,9 +40,20 @@ defmodule BotArmyFitness.Handlers.CoachTodayHandler do
   about her log that travels beside the session and decides nothing. The session itself
   carries the slots, and every slot carries each of its movements with **her** next
   number (`Progression`'s three answers, unchanged: a set-shaped map, `"top"`, or `null`)
-  and the day she last did it. Nothing here re-derives a number, and nothing here chooses
-  a movement for her: `"recent"` names the one she did most recently, and the rest stay on
-  the wire beside it.
+  and the day she last did it. Nothing here re-derives a number.
+
+  What the session does choose is one movement per slot: `"pick"`, the movement a card
+  leads with, chosen from the room as it stands (`BotArmyFitness.Gear`) rather than from a
+  preference held here — her recent movement when the room can do it, the first movement
+  the room can do when it cannot. Every other movement stays on the wire with `"ready"`
+  and `"needs"` beside it, so a wall movement on a floor day is a row that says what it
+  costs rather than a row that vanished. `"gear"` travels with the plan, because a plan is
+  a plan for a room.
+
+  The cable machine's state is the house's default — on the floor — until a write exists
+  to move it to the wall; the bell's setting is read from her own newest kettlebell set.
+  Both arrive in `"gear"`, so a card prints the room it is a plan for instead of assuming
+  it.
   """
 
   require Logger

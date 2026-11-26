@@ -48,8 +48,7 @@ defmodule BotArmyFitness.Coach do
   partial day would be a boss, and this is a house.
   """
 
-  alias BotArmyFitness.ExerciseCatalog
-  alias BotArmyFitness.Progression
+  alias BotArmyFitness.{ExerciseCatalog, Gear, Progression}
 
   # The method's own number of sets per slot. It sits on every slot rather than in a
   # constant so a session can ask for more or fewer without touching this module, and it
@@ -316,14 +315,41 @@ defmodule BotArmyFitness.Coach do
   """
   @spec plan(term(), term()) :: map() | nil
   def plan(session, history) when is_map(session) and is_map(history) do
-    slots = Enum.map(session["slots"], &plan_slot(&1, history))
+    plan(session, history, Gear.state(history))
+  end
+
+  def plan(_session, _history), do: nil
+
+  @doc """
+  The same session with the room's own state taken into account.
+
+  `gear` is `BotArmyFitness.Gear.state/1`'s answer: where the cable machine stands, and
+  what the bell is loaded to. Every slot keeps every movement it offers — the menu is not
+  shortened — and each movement line gains `"ready"`, whether the room as it stands can
+  do it, and `"needs"`, the piece of the setup it is waiting on.
+
+  What changes is that a slot now names **one** movement: `"pick"`, the movement a card
+  leads with. It is her recent one among those the room can do, so the constructed session
+  follows her log rather than a preference this module holds; when her recent movement is
+  the one waiting on the wall, the pick falls to the first movement that is ready. A slot
+  whose every movement is waiting says so in `"needs"`, and picks nothing: a session that
+  silently dropped a slot would be a shorter session pretending to be the method.
+
+  The state the plan was built from travels as `"gear"`, so the answer says what room it
+  is a plan for rather than leaving a card to assume one.
+  """
+  @spec plan(term(), term(), term()) :: map() | nil
+  def plan(session, history, gear)
+      when is_map(session) and is_map(history) and is_map(gear) do
+    slots = Enum.map(session["slots"], &plan_slot(&1, history, gear))
 
     session
     |> Map.put("slots", slots)
     |> Map.put("groups", groups_in(slots))
+    |> Map.put("gear", gear)
   end
 
-  def plan(_session, _history), do: nil
+  def plan(_session, _history, _gear), do: nil
 
   @doc """
   Every muscle group the rotation works, in the catalog's reading order.
@@ -358,15 +384,45 @@ defmodule BotArmyFitness.Coach do
   # The movements of one slot, each with her own next number beside it. The slot's own
   # words stay exactly as the method holds them — `"slot"` is what the slot is for and a
   # card draws it verbatim.
-  defp plan_slot(slot, history) do
-    movements = Enum.map(slot["options"], &movement_line(&1, history))
+  defp plan_slot(slot, history, gear) do
+    movements = Enum.map(slot["options"], &movement_line(&1, history, gear))
 
     slot
     |> Map.put("movements", movements)
     |> Map.put("recent", recent_movement(movements))
+    |> Map.put("pick", pick(movements))
+    |> Map.put("needs", waiting_on(movements))
   end
 
-  defp movement_line(value, history) do
+  # The one movement this slot leads with. Her recent movement keeps its place when the
+  # room can do it — that is a fact about her log read back, not a choice — and when it
+  # cannot, the first movement the room can do takes the slot. Nothing is picked when
+  # nothing is ready; `needs/1` says what the room would have to become.
+  defp pick(movements) do
+    ready = Enum.filter(movements, & &1["ready"])
+    recent = recent_movement(movements)
+
+    case Enum.find(ready, &(&1["value"] == recent)) || List.first(ready) do
+      nil -> nil
+      movement -> movement["value"]
+    end
+  end
+
+  # What the slot is waiting on, in words, when it cannot be done as the room stands.
+  # Empty for a slot with something ready, because a slot that can be done is not owed an
+  # explanation.
+  defp waiting_on(movements) do
+    if Enum.any?(movements, & &1["ready"]) do
+      []
+    else
+      movements
+      |> Enum.map(& &1["needs"])
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+    end
+  end
+
+  defp movement_line(value, history, gear) do
     exercise = ExerciseCatalog.exercise(value) || %{}
     target = ExerciseCatalog.target(value) || %{}
     sets = Map.get(history, value)
@@ -381,7 +437,9 @@ defmodule BotArmyFitness.Coach do
       "counts" => ExerciseCatalog.counts_for(value),
       "tip" => exercise["tip"],
       "last" => last_date(sets),
-      "next" => Progression.next_load(sets)
+      "next" => Progression.next_load(sets),
+      "ready" => Gear.ready?(value, gear),
+      "needs" => Gear.words(Gear.needs(value))
     }
   end
 

@@ -334,4 +334,98 @@ defmodule BotArmyFitness.CoachTest do
       assert Coach.plan(Coach.owed_on(Coach.rotation_anchor()), :not_a_history) == nil
     end
   end
+
+  describe "the pick: one movement per slot, from the room as it stands" do
+    setup do
+      %{session: Coach.owed_on(Coach.rotation_anchor())}
+    end
+
+    test "the room the plan was built from travels with it", %{session: session} do
+      plan = Coach.plan(session, %{})
+
+      assert plan["gear"] == %{"maxpro" => "floor", "bell" => nil}
+    end
+
+    test "every slot leads with a movement the room can do", %{session: session} do
+      plan = Coach.plan(session, %{})
+
+      for slot <- plan["slots"] do
+        assert slot["needs"] == [], "#{slot["slot"]} is waiting on #{inspect(slot["needs"])}"
+
+        pick = Enum.find(slot["movements"], &(&1["value"] == slot["pick"]))
+        assert pick, "#{slot["slot"]} picked nothing"
+        assert pick["ready"]
+      end
+    end
+
+    test "a wall movement she did last does not lead a floor day", %{session: session} do
+      history = %{"cable_shoulder_press" => [set("cable_shoulder_press", "2026-10-13", 12, 8)]}
+
+      slot =
+        Coach.plan(session, history)["slots"]
+        |> Enum.find(&(&1["slot"] == "shoulders overhead"))
+
+      # The recent fact is still hers, and still travels — but the pick is the first
+      # movement the floor can do, because a plan for the room she is in beats a plan for
+      # the room she was in last week.
+      assert slot["recent"] == "cable_shoulder_press"
+      assert slot["pick"] == "overhead_press"
+
+      waiting = Enum.find(slot["movements"], &(&1["value"] == "cable_shoulder_press"))
+      refute waiting["ready"]
+      assert waiting["needs"] == "the wall attachment"
+    end
+
+    test "with the wall up, the same log leads with her own movement again", %{session: session} do
+      history = %{"cable_shoulder_press" => [set("cable_shoulder_press", "2026-10-13", 12, 8)]}
+      plan = Coach.plan(session, history, %{"maxpro" => "wall", "bell" => nil})
+
+      slot = Enum.find(plan["slots"], &(&1["slot"] == "shoulders overhead"))
+
+      assert slot["pick"] == "cable_shoulder_press"
+      assert slot["needs"] == []
+    end
+
+    test "a slot with nothing ready picks nothing and says what it is waiting on" do
+      # The pantry rule for a plan: a row that cannot be pressed is a row that says why.
+      session = %{
+        "value" => "test",
+        "slots" => [
+          %{
+            "slot" => "a pulldown",
+            "works" => ["lats"],
+            "sets" => 3,
+            "options" => ["lat_pulldown"]
+          }
+        ]
+      }
+
+      slot = Coach.plan(session, %{})["slots"] |> List.first()
+
+      assert slot["pick"] == nil
+      assert slot["needs"] == ["the wall attachment"]
+      assert slot["movements"] |> Enum.map(& &1["value"]) == ["lat_pulldown"]
+    end
+
+    test "the movement list is never shortened by the room" do
+      # Ordering, not availability: the wall movements stay on the wire with what they
+      # cost beside them, because a plan that deleted them would be hiding the gym.
+      for session <- Coach.sessions() do
+        plan = Coach.plan(session, %{})
+
+        for {slot, source} <- Enum.zip(plan["slots"], session["slots"]) do
+          assert Enum.map(slot["movements"], & &1["value"]) == source["options"]
+        end
+      end
+    end
+
+    test "a floor day can be done end to end: every session picks something in every slot" do
+      for session <- Coach.sessions() do
+        for slot <- Coach.plan(session, %{})["slots"] do
+          assert is_binary(slot["pick"]),
+                 "#{session["value"]}/#{slot["slot"]} has no movement for a floor day"
+        end
+      end
+    end
+  end
 end
